@@ -1,28 +1,28 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5.1)
+
 project(echo_helm)
 
-add_compile_options(-std=c++11)
+set(CMAKE_CXX_STANDARD 17)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-find_package(catkin REQUIRED COMPONENTS
-  geometry_msgs
-  mavros
-  roscpp
-  project11_msgs
-)
+find_package(ament_cmake REQUIRED)
 
-catkin_package(
-   CATKIN_DEPENDS geometry_msgs mavros roscpp project11_msgs
-)
-
-include_directories(
-  ${catkin_INCLUDE_DIRS}
-)
+find_package(geometry_msgs REQUIRED)
+find_package(mavros REQUIRED)
+find_package(mavros_msgs REQUIRED)
+find_package(project11_msgs REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
 
 add_executable(${PROJECT_NAME}_node src/echo_helm_node.cpp)
 
-add_dependencies(${PROJECT_NAME}_node ${catkin_EXPORTED_TARGETS})
+ament_target_dependencies(${PROJECT_NAME}_node geometry_msgs mavros mavros_msgs project11_msgs rclcpp rclcpp_lifecycle)
 
-target_link_libraries(${PROJECT_NAME}_node
-   ${catkin_LIBRARIES}
+install(TARGETS ${PROJECT_NAME}_node
+  DESTINATION lib/${PROJECT_NAME}
 )
+
+ament_package()
 
