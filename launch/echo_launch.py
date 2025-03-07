@@ -3,6 +3,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.actions import GroupAction
 from launch.actions import IncludeLaunchDescription
 from launch.conditions import IfCondition
+from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
@@ -18,11 +19,6 @@ def generate_launch_description():
   enable_bridge = LaunchConfiguration('enable_bridge')
   fcu_url = LaunchConfiguration('fcu_url')
   gcs_url = LaunchConfiguration('gcs_url')
-  tgt_system = LaunchConfiguration('tgt_system')
-  tgt_component = LaunchConfiguration('tgt_component')
-  pluginlists_yaml = LaunchConfiguration('pluginlists_yaml')
-  config_yaml = LaunchConfiguration('config_yaml')
-  fcu_protocol = LaunchConfiguration('fcu_protocol')
 
   is_simulator = LaunchConfiguration('is_simulator')
 
@@ -31,7 +27,7 @@ def generate_launch_description():
   )
 
   enable_bridge_arg = DeclareLaunchArgument(
-    "enable_bridge", default_value=TextSubstitution(text="true")
+    "enable_bridge", default_value=TextSubstitution(text="false")
   )
 
   fcu_url_arg = DeclareLaunchArgument(
@@ -39,7 +35,7 @@ def generate_launch_description():
   )
 
   gcs_url_arg = DeclareLaunchArgument(
-    "gcu_url", default_value=TextSubstitution(text="")
+    "gcs_url", default_value=TextSubstitution(text="")
   )
 
   tgt_system_arg = DeclareLaunchArgument(
@@ -106,6 +102,11 @@ def generate_launch_description():
         ]),
         condition=IfCondition(is_simulator)
       ),
+      Node(
+        package='mru_transform',
+        executable='mru_transform_node',
+        name='mru_transform'
+      ),
       IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
           PathJoinSubstitution([
@@ -119,22 +120,20 @@ def generate_launch_description():
           'enable_bridge': enable_bridge,
         }.items()
       ),
-      Node(
-        package="mavros",
-        executable='mavros_node',
-        name="mavros",
-        parameters=[{
+      IncludeLaunchDescription(
+        AnyLaunchDescriptionSource(
+          PathJoinSubstitution([
+            FindPackageShare('mavros'),
+            'launch',
+            'apm.launch'
+          ])
+        ),
+        launch_arguments={
           "fcu_url": fcu_url,
           "gcs_url": gcs_url,
-          "target_system_id": tgt_system,
-          "target_component_id": tgt_component,
-          "fcu_protocol": fcu_protocol
-        },
-        pluginlists_yaml,
-        config_yaml
-        ]
+          "namespace": 'mavros'
+        }.items()
       ),
-
       Node(
         package="echo_helm",
         executable="echo_helm_node",
