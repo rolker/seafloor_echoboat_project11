@@ -1,7 +1,9 @@
 /**/platform_sender:
   ros__parameters:
-    width: 0.5
-    length: 2.0
+    width: 0.8
+    length: 1.75
+    reference_x: -.225
+    reference_y: 0.05
     color:
       red: 1.0
       green: 1.0

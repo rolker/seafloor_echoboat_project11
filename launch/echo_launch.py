@@ -38,36 +38,6 @@ def generate_launch_description():
     "gcs_url", default_value=TextSubstitution(text="")
   )
 
-  tgt_system_arg = DeclareLaunchArgument(
-    "tgt_system", default_value=TextSubstitution(text="1")
-  )
-
-  tgt_component_arg = DeclareLaunchArgument(
-    "tgt_component", default_value=TextSubstitution(text="1")
-  )
-
-  pluginlists_yaml_arg = DeclareLaunchArgument(
-    "pluginlists_yaml",
-    default_value=PathJoinSubstitution([
-      FindPackageShare('mavros'),
-      'launch',
-      'apm_pluginlists.yaml'
-    ])
-  )
-
-  config_yaml_arg = DeclareLaunchArgument(
-    "config_yaml",
-    default_value=PathJoinSubstitution([
-      FindPackageShare('mavros'),
-      'launch',
-      'apm_config.yaml'
-    ])
-  )
-
-  fcu_protocol_arg = DeclareLaunchArgument(
-    "fcu_protocol", default_value=TextSubstitution(text="v2.0")
-  )
-
   is_simulator_arg = DeclareLaunchArgument(
     "is_simulator", default_value=TextSubstitution(text="false")
   )
@@ -78,11 +48,6 @@ def generate_launch_description():
     enable_bridge_arg,
     fcu_url_arg,
     gcs_url_arg,
-    tgt_system_arg,
-    tgt_component_arg,
-    pluginlists_yaml_arg,
-    config_yaml_arg,
-    fcu_protocol_arg,
     is_simulator_arg,
     GroupAction(
     actions=[
@@ -134,11 +99,15 @@ def generate_launch_description():
           "namespace": 'mavros'
         }.items()
       ),
-      Node(
-        package="echo_helm",
-        executable="echo_helm_node",
-        name="echo_helm"
-      )
+      IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+          PathJoinSubstitution([
+            FindPackageShare('echo_helm'),
+            'launch',
+            'echo_helm_launch.py'
+          ])
+        ),
+      ),
     ]
   )
   ])
