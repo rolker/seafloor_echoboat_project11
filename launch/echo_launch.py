@@ -43,6 +43,7 @@ def generate_launch_description():
   )
 
 
+
   return LaunchDescription([
     namespace_arg,
     enable_bridge_arg,
@@ -109,7 +110,22 @@ def generate_launch_description():
         ),
       ),
     ]
-  )
+  ),
+  IncludeLaunchDescription(
+  PythonLaunchDescriptionSource(
+    PathJoinSubstitution([
+      FindPackageShare('echoboat_project11'),
+      'launch',
+      'nav2_bringup_launch.py'
+    ])
+  ),
+  launch_arguments={
+    'namespace': namespace,
+    'use_namespace': 'true',
+    'use_composition': 'False',
+  }.items()
+)
+
   ])
 
 # <launch>
