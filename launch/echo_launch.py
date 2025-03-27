@@ -16,6 +16,13 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
   namespace = LaunchConfiguration('namespace')
+
+  frame_prefix = LaunchConfiguration('frame_prefix')
+
+  frame_prefix_arg = DeclareLaunchArgument(
+      "frame_prefix", default_value="izzy/"
+  )
+
   enable_bridge = LaunchConfiguration('enable_bridge')
   fcu_url = LaunchConfiguration('fcu_url')
   gcs_url = LaunchConfiguration('gcs_url')
@@ -42,10 +49,12 @@ def generate_launch_description():
     "is_simulator", default_value=TextSubstitution(text="false")
   )
 
+  remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
 
 
   return LaunchDescription([
     namespace_arg,
+    frame_prefix_arg,
     enable_bridge_arg,
     fcu_url_arg,
     gcs_url_arg,
@@ -71,7 +80,13 @@ def generate_launch_description():
       Node(
         package='mru_transform',
         executable='mru_transform_node',
-        name='mru_transform'
+        name='mru_transform',
+        parameters=[{
+          "map_frame": [frame_prefix,"map"],
+          "base_frame": [frame_prefix,"base_link"],
+          "odom_frame": [frame_prefix, "odom"],
+        }],
+        remappings=remappings  
       ),
       IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
