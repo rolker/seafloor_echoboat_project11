@@ -60,86 +60,86 @@ def generate_launch_description():
     gcs_url_arg,
     is_simulator_arg,
     GroupAction(
-    actions=[
-      PushROSNamespace(namespace),
-      SetParametersFromFile(
-        filename=PathJoinSubstitution([
+      actions=[
+        PushROSNamespace(namespace),
+        SetParametersFromFile(
+          filename=PathJoinSubstitution([
+            FindPackageShare('echoboat_project11'),
+            'config',
+            'echo.yaml'
+          ])
+        ),
+        SetParametersFromFile(
+          filename=PathJoinSubstitution([
+            FindPackageShare('echoboat_project11'),
+            'config',
+            'sim_echo.yaml'
+          ]),
+          condition=IfCondition(is_simulator)
+        ),
+        Node(
+          package='mru_transform',
+          executable='mru_transform_node',
+          name='mru_transform',
+          parameters=[{
+            "map_frame": [frame_prefix,"map"],
+            "base_frame": [frame_prefix,"base_link"],
+            "odom_frame": [frame_prefix, "odom"],
+          }],
+          remappings=remappings  
+        ),
+        IncludeLaunchDescription(
+          PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+              FindPackageShare('project11'),
+              'launch',
+              'robot_core_launch.py'
+            ])
+          ),
+          launch_arguments={
+            'namespace': namespace,
+            'enable_bridge': enable_bridge,
+          }.items()
+        ),
+        IncludeLaunchDescription(
+          AnyLaunchDescriptionSource(
+            PathJoinSubstitution([
+              FindPackageShare('mavros'),
+              'launch',
+              'apm.launch'
+            ])
+          ),
+          launch_arguments={
+            "fcu_url": fcu_url,
+            "gcs_url": gcs_url,
+            "namespace": 'mavros'
+          }.items()
+        ),
+        IncludeLaunchDescription(
+          PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+              FindPackageShare('echo_helm'),
+              'launch',
+              'echo_helm_launch.py'
+            ])
+          ),
+        ),
+      ]
+    ),
+    IncludeLaunchDescription(
+      PythonLaunchDescriptionSource(
+        PathJoinSubstitution([
           FindPackageShare('echoboat_project11'),
-          'config',
-          'echo.yaml'
+          'launch',
+          'nav2_bringup_launch.py'
         ])
       ),
-      SetParametersFromFile(
-        filename=PathJoinSubstitution([
-          FindPackageShare('echoboat_project11'),
-          'config',
-          'sim_echo.yaml'
-        ]),
-        condition=IfCondition(is_simulator)
-      ),
-      Node(
-        package='mru_transform',
-        executable='mru_transform_node',
-        name='mru_transform',
-        parameters=[{
-          "map_frame": [frame_prefix,"map"],
-          "base_frame": [frame_prefix,"base_link"],
-          "odom_frame": [frame_prefix, "odom"],
-        }],
-        remappings=remappings  
-      ),
-      IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-          PathJoinSubstitution([
-            FindPackageShare('project11'),
-            'launch',
-            'robot_core_launch.py'
-          ])
-        ),
-        launch_arguments={
-          'namespace': namespace,
-          'enable_bridge': enable_bridge,
-        }.items()
-      ),
-      IncludeLaunchDescription(
-        AnyLaunchDescriptionSource(
-          PathJoinSubstitution([
-            FindPackageShare('mavros'),
-            'launch',
-            'apm.launch'
-          ])
-        ),
-        launch_arguments={
-          "fcu_url": fcu_url,
-          "gcs_url": gcs_url,
-          "namespace": 'mavros'
-        }.items()
-      ),
-      IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-          PathJoinSubstitution([
-            FindPackageShare('echo_helm'),
-            'launch',
-            'echo_helm_launch.py'
-          ])
-        ),
-      ),
-    ]
-  ),
-  IncludeLaunchDescription(
-  PythonLaunchDescriptionSource(
-    PathJoinSubstitution([
-      FindPackageShare('echoboat_project11'),
-      'launch',
-      'nav2_bringup_launch.py'
-    ])
-  ),
-  launch_arguments={
-    'namespace': namespace,
-    'use_namespace': 'true',
-    'use_composition': 'False',
-  }.items()
-)
+      launch_arguments={
+        'namespace': namespace,
+        'use_namespace': 'true',
+        'use_composition': 'False',
+      }.items()
+    )
 
   ])
 
