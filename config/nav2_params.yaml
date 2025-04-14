@@ -111,7 +111,7 @@ controller_server:
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
 
-      allow_reversing: false
+      allow_reversing: true
       approach_velocity_scaling_dist: 10.0
       cancel_deceleration: 3.2
       cost_scaling_dist: 100.0
@@ -129,15 +129,15 @@ controller_server:
       min_lookahead_dist: 3.0
       regulated_linear_scaling_min_radius: 5.0
       regulated_linear_scaling_min_speed: 0.5
-      rotate_to_heading_angular_vel: 1.8
-      rotate_to_heading_min_angle: 0.785
+      rotate_to_heading_angular_vel: 0.5
+      rotate_to_heading_min_angle: 0.5
       transform_tolerance: 0.1
       use_cancel_deceleration: true
       use_collision_detection: true
       use_cost_regulated_linear_velocity_scaling: true
       use_fixed_curvature_lookahead: true
       use_regulated_linear_velocity_scaling: true
-      use_rotate_to_heading: false
+      use_rotate_to_heading: true
       use_velocity_scaled_lookahead_dist: true
 
     MPPI:
