@@ -10,7 +10,9 @@ from launch.substitutions import PathJoinSubstitution
 from launch.substitutions import TextSubstitution
 from launch_ros.actions import Node
 from launch_ros.actions import PushROSNamespace
+from launch_ros.actions import SetParameter
 from launch_ros.actions import SetParametersFromFile
+from launch_ros.actions import SetRemap
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -20,7 +22,7 @@ def generate_launch_description():
   frame_prefix = LaunchConfiguration('frame_prefix')
 
   frame_prefix_arg = DeclareLaunchArgument(
-      "frame_prefix", default_value="izzy/"
+      "frame_prefix", default_value="echo/"
   )
 
   enable_bridge = LaunchConfiguration('enable_bridge')
@@ -49,9 +51,6 @@ def generate_launch_description():
     "is_simulator", default_value=TextSubstitution(text="false")
   )
 
-  remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
-
-
   return LaunchDescription([
     namespace_arg,
     frame_prefix_arg,
@@ -77,6 +76,14 @@ def generate_launch_description():
           ]),
           condition=IfCondition(is_simulator)
         ),
+        SetRemap(
+          src = '/tf',
+          dst = ['/', namespace, '/tf']
+        ),
+        SetRemap(
+          src = '/tf_static',
+          dst = ['/', namespace, '/tf_static']
+        ),
         Node(
           package='mru_transform',
           executable='mru_transform_node',
@@ -86,7 +93,23 @@ def generate_launch_description():
             "base_frame": [frame_prefix,"base_link"],
             "odom_frame": [frame_prefix, "odom"],
           }],
-          remappings=remappings  
+        ),
+        SetParameter(
+          name="sea_surface_frame",
+          value=[frame_prefix, "map_tide"]
+        ),
+        IncludeLaunchDescription(
+          PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+              FindPackageShare('mru_transform'),
+              'launch',
+              'sea_surface_estimator_launch.py'
+            ])
+          ),
+          launch_arguments={
+            'namespace': namespace,
+            'enable_bridge': enable_bridge,
+          }.items()
         ),
         IncludeLaunchDescription(
           PythonLaunchDescriptionSource(
