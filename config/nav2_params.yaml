@@ -352,9 +352,10 @@ behavior_server:
       plugin: "nav2_behaviors::AssistedTeleop"
     hover:
       plugin: "project11_navigation::Hover"
-      minimum_radius: 5.0
-      maximum_radius: 15.0
-      maximum_speed: 1.5
+      minimum_radius: 2.5
+      maximum_radius: 10.0
+      maximum_speed: 1.0
+      maximum_rotation_speed: 0.25
       deceleration: -0.45
       generate_visualization: true
 
