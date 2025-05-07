@@ -204,7 +204,10 @@ private:
     // from standby to active
     if(standby_ && !msg.data)
     {
-
+      auto set_mav_frame_request = std::make_shared<mavros_msgs::srv::SetMavFrame::Request>();
+      set_mav_frame_request->mav_frame = mavros_msgs::srv::SetMavFrame::Request::FRAME_BODY_NED;
+      frame_service_client_->async_send_request(set_mav_frame_request, std::bind(&EchoHelm::mavFrameResponseCallback, this, std::placeholders::_1));
+  
       auto arm_request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
       arm_request->value = false;
       arm_service_client_->async_send_request(arm_request, std::bind(&EchoHelm::disarmedForGuidedCallback, this, std::placeholders::_1));
