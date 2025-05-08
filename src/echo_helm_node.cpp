@@ -13,6 +13,7 @@
 #include <mavros_msgs/srv/set_mode.hpp>
 #include <mavros_msgs/srv/set_mav_frame.hpp>
 #include <mavros_msgs/msg/state.hpp>
+#include <mavros_msgs/msg/override_rc_in.hpp>
 #include <mavros_msgs/srv/stream_rate.hpp>
 #include <mavros_msgs/msg/manual_control.hpp>
 
@@ -41,7 +42,8 @@ public:
     
     cmd_vel_publisher_ = create_publisher<geometry_msgs::msg::TwistStamped>("mavros/setpoint_velocity/cmd_vel", 10);
 
-    manual_control_publisher_ = create_publisher<mavros_msgs::msg::ManualControl>("mavros/manual_control/send", 1);
+    //manual_control_publisher_ = create_publisher<mavros_msgs::msg::ManualControl>("mavros/manual_control/send", 1);
+    rc_override_publisher_ = create_publisher<mavros_msgs::msg::OverrideRCIn>("mavros/rc/override", 1);
 
     cmd_vel_subscription_ = create_subscription<geometry_msgs::msg::TwistStamped>("project11/control/cmd_vel", 10, std::bind(&EchoHelm::cmdVelCallback, this, std::placeholders::_1));
 
@@ -81,7 +83,8 @@ public:
   {
     status_publisher_.reset();
     cmd_vel_publisher_.reset();
-    manual_control_publisher_.reset();
+    //manual_control_publisher_.reset();
+    rc_override_publisher_.reset();
 
     cmd_vel_subscription_.reset();
     standby_subscription_.reset();
@@ -101,7 +104,9 @@ private:
 
   rclcpp::Publisher<project11_msgs::msg::Heartbeat>::SharedPtr status_publisher_;
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_publisher_;
-  rclcpp::Publisher<mavros_msgs::msg::ManualControl>::SharedPtr manual_control_publisher_;
+  //rclcpp::Publisher<mavros_msgs::msg::ManualControl>::SharedPtr manual_control_publisher_;
+  rclcpp::Publisher<mavros_msgs::msg::OverrideRCIn>::SharedPtr rc_override_publisher_;
+
 
   rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_subscription_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr standby_subscription_;
@@ -147,7 +152,38 @@ private:
   {
     if(!standby_)
     {
-      cmd_vel_publisher_->publish(msg);
+      // scale 2 m/s to full throttle
+      double throttle = std::max(-1.0, std::min(1.0, msg.twist.linear.x /2.0));
+      // scale 1.5 rad/s to full rudder
+      double yaw = std::max(-1.0, std::min(1.0, msg.twist.angular.z / 1.5));
+
+      // turning also seems to make the boat go forwards, so try to reduce that
+      double throttle_backoff = -0.02*abs(yaw);
+      throttle += throttle_backoff;
+
+      mavros_msgs::msg::OverrideRCIn rc_msg;
+      rc_msg.channels[0] = 1500 - (yaw * 400);
+      // remove deadband
+      if (yaw > 0)
+        rc_msg.channels[0] -= 100;
+      else if (yaw < 0)
+        rc_msg.channels[0] += 100;
+
+      rc_msg.channels[1] = 1500 + (throttle * 420);
+      // remove deadband
+      if (throttle > 0)
+        rc_msg.channels[1] += 80;
+      else if (throttle < 0)
+        rc_msg.channels[1] -= 80;
+
+
+
+      for(std::size_t i = 2; i < rc_msg.channels.size(); i++)
+        rc_msg.channels[i] = 0;
+
+      rc_override_publisher_->publish(rc_msg);
+
+      //cmd_vel_publisher_->publish(msg);
     }
   }
 
@@ -210,7 +246,8 @@ private:
   
       auto arm_request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
       arm_request->value = false;
-      arm_service_client_->async_send_request(arm_request, std::bind(&EchoHelm::disarmedForGuidedCallback, this, std::placeholders::_1));
+      //arm_service_client_->async_send_request(arm_request, std::bind(&EchoHelm::disarmedForGuidedCallback, this, std::placeholders::_1));
+      arm_service_client_->async_send_request(arm_request, std::bind(&EchoHelm::disarmedForManualCallback, this, std::placeholders::_1));
     }
     standby_ = msg.data;
     // to standby
