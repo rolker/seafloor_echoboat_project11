@@ -76,14 +76,14 @@ def generate_launch_description():
           ]),
           condition=IfCondition(is_simulator)
         ),
-        SetRemap(
-          src = '/tf',
-          dst = ['/', namespace, '/tf']
-        ),
-        SetRemap(
-          src = '/tf_static',
-          dst = ['/', namespace, '/tf_static']
-        ),
+        # SetRemap(
+        #   src = '/tf',
+        #   dst = ['/', namespace, '/tf']
+        # ),
+        # SetRemap(
+        #   src = '/tf_static',
+        #   dst = ['/', namespace, '/tf_static']
+        # ),
         Node(
           package='mru_transform',
           executable='mru_transform_node',
