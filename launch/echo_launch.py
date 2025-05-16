@@ -76,14 +76,6 @@ def generate_launch_description():
           ]),
           condition=IfCondition(is_simulator)
         ),
-        # SetRemap(
-        #   src = '/tf',
-        #   dst = ['/', namespace, '/tf']
-        # ),
-        # SetRemap(
-        #   src = '/tf_static',
-        #   dst = ['/', namespace, '/tf_static']
-        # ),
         Node(
           package='mru_transform',
           executable='mru_transform_node',
@@ -124,20 +116,53 @@ def generate_launch_description():
             'enable_bridge': enable_bridge,
           }.items()
         ),
-        IncludeLaunchDescription(
-          AnyLaunchDescriptionSource(
-            PathJoinSubstitution([
-              FindPackageShare('mavros'),
-              'launch',
-              'apm.launch'
-            ])
-          ),
-          launch_arguments={
-            "fcu_url": fcu_url,
-            "gcs_url": gcs_url,
-            "namespace": 'mavros'
-          }.items()
+        GroupAction(
+          actions=[
+            PushROSNamespace('mavros'),
+            Node(
+              package='mavros',
+              executable='mavros_node',
+              parameters=[
+                {
+                  "fcu_url": fcu_url,
+                  "gcs_url": gcs_url,
+                  "target_system": 1,
+                  "target_component": 1,
+                  "fcu_protocol": "v2.0"
+                },
+                PathJoinSubstitution([
+                  FindPackageShare('mavros'),
+                  'launch',
+                  'apm_pluginlists.yaml'
+                ]),
+                PathJoinSubstitution([
+                  FindPackageShare('mavros'),
+                  'launch',
+                  'apm_config.yaml'
+                ]),
+                PathJoinSubstitution([
+                  FindPackageShare('echoboat_project11'),
+                  'config',
+                  'mavros.yaml'
+                ]),
+              ],
+            ),
+          ]
         ),
+        # IncludeLaunchDescription(
+        #   AnyLaunchDescriptionSource(
+        #     PathJoinSubstitution([
+        #       FindPackageShare('mavros'),
+        #       'launch',
+        #       'apm.launch'
+        #     ])
+        #   ),
+        #   launch_arguments={
+        #     "fcu_url": fcu_url,
+        #     "gcs_url": gcs_url,
+        #     "namespace": 'mavros'
+        #   }.items()
+        # ),
         IncludeLaunchDescription(
           PythonLaunchDescriptionSource(
             PathJoinSubstitution([
