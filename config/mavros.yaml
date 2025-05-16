@@ -1,0 +1,7 @@
+/**/setpoint_velocity:
+  ros__parameters:
+    mav_frame: "BODY_NED"
+
+/**/time:
+  ros__parameters:
+    timesync_rate: 0.0

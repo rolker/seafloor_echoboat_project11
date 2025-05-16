@@ -48,7 +48,9 @@
     tgt_system: 1
     tgt_component : 1
     system_id: 255
-    component_id: 240    
+    component_id: 240
+    setpoint_velocity:
+      mav_frame: "BODY_NED"
 
 
 /**/navigator:
