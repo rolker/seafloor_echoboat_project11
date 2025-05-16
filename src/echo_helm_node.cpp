@@ -11,11 +11,9 @@
 #include "project11_msgs/msg/heartbeat.hpp"
 #include <mavros_msgs/srv/command_bool.hpp>
 #include <mavros_msgs/srv/set_mode.hpp>
-#include <mavros_msgs/srv/set_mav_frame.hpp>
 #include <mavros_msgs/msg/state.hpp>
 #include <mavros_msgs/msg/override_rc_in.hpp>
 #include <mavros_msgs/srv/stream_rate.hpp>
-#include <mavros_msgs/msg/manual_control.hpp>
 
 using namespace std::chrono_literals;
 
@@ -56,7 +54,6 @@ public:
 
     arm_service_client_ = create_client<mavros_msgs::srv::CommandBool>("mavros/cmd/arming");
     mode_service_client_ = create_client<mavros_msgs::srv::SetMode>("mavros/set_mode");
-    frame_service_client_ = create_client<mavros_msgs::srv::SetMavFrame>("mavros/setpoint_velocity/mav_frame");
     stream_rate_service_client_ = create_client<mavros_msgs::srv::StreamRate>("mavros/set_stream_rate");
     
     service_cleanup_timer_ = create_wall_timer(5s, std::bind(&EchoHelm::cleanupOldRequests, this));
@@ -74,10 +71,6 @@ public:
     stream_rate->on_off = 1;
     stream_rate_service_client_->async_send_request(stream_rate, std::bind(&EchoHelm::streamRateResponseCallback, this, std::placeholders::_1));
 
-    auto set_mav_frame_request = std::make_shared<mavros_msgs::srv::SetMavFrame::Request>();
-    set_mav_frame_request->mav_frame = mavros_msgs::srv::SetMavFrame::Request::FRAME_BODY_NED;
-    frame_service_client_->async_send_request(set_mav_frame_request, std::bind(&EchoHelm::mavFrameResponseCallback, this, std::placeholders::_1));
-
     return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
   }
 
@@ -94,7 +87,6 @@ public:
 
     arm_service_client_.reset();
     mode_service_client_.reset();
-    frame_service_client_.reset();
     stream_rate_service_client_.reset();
 
     service_cleanup_timer_.reset();
@@ -118,7 +110,6 @@ private:
 
   CommandBoolClient::SharedPtr arm_service_client_;
   rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr mode_service_client_;
-  rclcpp::Client<mavros_msgs::srv::SetMavFrame>::SharedPtr frame_service_client_;
   rclcpp::Client<mavros_msgs::srv::StreamRate>::SharedPtr stream_rate_service_client_;
   
   rclcpp::TimerBase::SharedPtr service_cleanup_timer_;
@@ -137,11 +128,6 @@ private:
     mode_service_client_->prune_requests_older_than(timeout, &pruned_requests);
     if(!pruned_requests.empty())
       RCLCPP_WARN_STREAM(get_logger(), "No response for at least 5 seconds from " << pruned_requests.size() << "set_mode service request(s)");
-
-    pruned_requests.clear();
-    frame_service_client_->prune_requests_older_than(timeout, &pruned_requests);
-    if(!pruned_requests.empty())
-      RCLCPP_WARN_STREAM(get_logger(), "No response for at least 5 seconds from " << pruned_requests.size() << "mav_frame service request(s)");
     
     pruned_requests.clear();
     stream_rate_service_client_->prune_requests_older_than(timeout, &pruned_requests);
@@ -196,11 +182,6 @@ private:
     auto request_and_response = future.get();
   }
 
-  void mavFrameResponseCallback(rclcpp::Client<mavros_msgs::srv::SetMavFrame>::SharedFutureWithRequest future)
-  {
-    auto request_and_response = future.get();
-  }
-
   void armingResponseCallback(CommandBoolClient::SharedFutureWithRequest future)
   {
     auto request_and_response = future.get();
@@ -243,11 +224,7 @@ private:
   {
     // from standby to active
     if(standby_ && !msg.data)
-    {
-      auto set_mav_frame_request = std::make_shared<mavros_msgs::srv::SetMavFrame::Request>();
-      set_mav_frame_request->mav_frame = mavros_msgs::srv::SetMavFrame::Request::FRAME_BODY_NED;
-      frame_service_client_->async_send_request(set_mav_frame_request, std::bind(&EchoHelm::mavFrameResponseCallback, this, std::placeholders::_1));
-  
+    {  
       auto arm_request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
       arm_request->value = false;
       if(rc_mode_)
