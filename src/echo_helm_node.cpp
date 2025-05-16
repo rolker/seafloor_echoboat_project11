@@ -74,9 +74,9 @@ public:
     stream_rate->on_off = 1;
     stream_rate_service_client_->async_send_request(stream_rate, std::bind(&EchoHelm::streamRateResponseCallback, this, std::placeholders::_1));
 
-    auto set_mav_frame_request = std::make_shared<mavros_msgs::srv::SetMavFrame::Request>();
-    set_mav_frame_request->mav_frame = mavros_msgs::srv::SetMavFrame::Request::FRAME_BODY_NED;
-    frame_service_client_->async_send_request(set_mav_frame_request, std::bind(&EchoHelm::mavFrameResponseCallback, this, std::placeholders::_1));
+    // auto set_mav_frame_request = std::make_shared<mavros_msgs::srv::SetMavFrame::Request>();
+    // set_mav_frame_request->mav_frame = mavros_msgs::srv::SetMavFrame::Request::FRAME_BODY_NED;
+    // frame_service_client_->async_send_request(set_mav_frame_request, std::bind(&EchoHelm::mavFrameResponseCallback, this, std::placeholders::_1));
 
     return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
   }
@@ -136,17 +136,24 @@ private:
     pruned_requests.clear();
     mode_service_client_->prune_requests_older_than(timeout, &pruned_requests);
     if(!pruned_requests.empty())
-      RCLCPP_WARN_STREAM(get_logger(), "No response for at least 5 seconds from " << pruned_requests.size() << "set_mode service request(s)");
+      RCLCPP_WARN_STREAM(get_logger(), "No response for at least 5 seconds from " << pruned_requests.size() << " set_mode service request(s)");
 
     pruned_requests.clear();
     frame_service_client_->prune_requests_older_than(timeout, &pruned_requests);
     if(!pruned_requests.empty())
-      RCLCPP_WARN_STREAM(get_logger(), "No response for at least 5 seconds from " << pruned_requests.size() << "mav_frame service request(s)");
+      RCLCPP_WARN_STREAM(get_logger(), "No response for at least 5 seconds from " << pruned_requests.size() << " mav_frame service request(s)");
     
     pruned_requests.clear();
     stream_rate_service_client_->prune_requests_older_than(timeout, &pruned_requests);
     if(!pruned_requests.empty())
-      RCLCPP_WARN_STREAM(get_logger(), "No response for at least 5 seconds from " << pruned_requests.size() << "set_stream_rate service request(s)");
+    {
+      RCLCPP_WARN_STREAM(get_logger(), "No response for at least 5 seconds from " << pruned_requests.size() << " set_stream_rate service request(s)");
+      auto stream_rate = std::make_shared<mavros_msgs::srv::StreamRate::Request>();
+      stream_rate->message_rate = 10;
+      stream_rate->on_off = 1;
+      stream_rate_service_client_->async_send_request(stream_rate, std::bind(&EchoHelm::streamRateResponseCallback, this, std::placeholders::_1));
+
+    }
   }
 
   void cmdVelCallback(const geometry_msgs::msg::TwistStamped& msg)
@@ -194,11 +201,13 @@ private:
   void streamRateResponseCallback(rclcpp::Client<mavros_msgs::srv::StreamRate>::SharedFutureWithRequest future)
   {
     auto request_and_response = future.get();
+    RCLCPP_INFO_STREAM(get_logger(), "Stream rate call done.");
   }
 
   void mavFrameResponseCallback(rclcpp::Client<mavros_msgs::srv::SetMavFrame>::SharedFutureWithRequest future)
   {
     auto request_and_response = future.get();
+    RCLCPP_INFO_STREAM(get_logger(), "Mav frame call response:" << request_and_response.second->success);
   }
 
   void armingResponseCallback(CommandBoolClient::SharedFutureWithRequest future)
