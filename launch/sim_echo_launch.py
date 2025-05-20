@@ -69,7 +69,7 @@ def generate_launch_description():
           ])
         ),
         launch_arguments={
-          'namespace': operator_namespace,
+          'operator_namespace': operator_namespace,
           'robot_namespace': namespace,
           'enable_bridge': enable_bridge,
           'local_port': '4201'
