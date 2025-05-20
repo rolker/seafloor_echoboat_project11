@@ -61,7 +61,7 @@ controller_server:
       yaw_goal_tolerance: 5.0
     FollowPath:
       plugin: "project11_navigation::controllers::CrabbingPathFollower"
-      default_speed: 1.25
+      default_speed: 0.75
       visualization: true
       pid:
         upper_limit: 90.0
