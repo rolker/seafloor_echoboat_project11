@@ -146,6 +146,8 @@ def generate_launch_description():
                   'mavros.yaml'
                 ]),
               ],
+              respawn = True,
+              respawn_delay = 5.0,
             ),
           ]
         ),
