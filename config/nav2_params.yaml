@@ -67,7 +67,7 @@ controller_server:
         upper_limit: 90.0
         lower_limit: -90.0
         windup_limit: 50.0
-        kp: 20.0
+        kp: 25.0
         ki: 0.5
         kd: 0.6
         publish_debug: true
