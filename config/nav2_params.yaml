@@ -66,10 +66,10 @@ controller_server:
       pid:
         upper_limit: 90.0
         lower_limit: -90.0
-        windup_limit: 50.0
-        kp: 25.0
+        windup_limit: 25.0
+        kp: 28.0
         ki: 0.5
-        kd: 0.6
+        kd: 0.45
         publish_debug: true
 
 
@@ -155,7 +155,7 @@ planner_server:
       allow_unknown: true
       change_penalty: 0.5
       cost_penalty: 10.0
-      minimum_turning_radius: 1.0
+      minimum_turning_radius: 3.0
       debug_visualizations: false
       max_iterations: -1
       max_on_approach_iterations: -1
