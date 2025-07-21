@@ -174,6 +174,20 @@ def generate_launch_description():
             ])
           ),
         ),
+        GroupAction(
+          actions=[
+            PushROSNamespace('s57'),
+            IncludeLaunchDescription(
+              PythonLaunchDescriptionSource(
+                PathJoinSubstitution([
+                  FindPackageShare('s57_grids'),
+                  'launch',
+                  's57_grids_launch.py'
+                ])
+              ),
+            )
+          ]
+        )
       ]
     ),
     IncludeLaunchDescription(
