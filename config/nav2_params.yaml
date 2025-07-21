@@ -66,10 +66,10 @@ controller_server:
       pid:
         upper_limit: 90.0
         lower_limit: -90.0
-        windup_limit: 25.0
-        kp: 28.0
+        windup_limit: 30.0
+        kp: 20.0
         ki: 0.5
-        kd: 0.45
+        kd: 0.6
         publish_debug: true
 
 
