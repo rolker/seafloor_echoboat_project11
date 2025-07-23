@@ -97,17 +97,17 @@
         Ki: 0.5
         Kd: 0.6
 
-/**/s57_grids:
-  ros__parameters:
-    map_frame: echo/map
+# /**/s57_grids:
+#   ros__parameters:
+#     map_frame: echo/map
 
-    robot:
-      frame_id: echo/base_link
-      minimum_depth: 0.0
-      maximum_caution_depth: 1.0
-      overhead_clearance: 2.0
-      minimum_speed: 0.01
-      maximum_speed: 2.5
+#     robot:
+#       frame_id: echo/base_link
+#       minimum_depth: 0.0
+#       maximum_caution_depth: 1.0
+#       overhead_clearance: 2.0
+#       minimum_speed: 0.01
+#       maximum_speed: 2.5
 
     # grids:
     #   - name: local

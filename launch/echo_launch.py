@@ -177,6 +177,10 @@ def generate_launch_description():
         GroupAction(
           actions=[
             PushROSNamespace('s57'),
+            SetParameter(
+              name="map_frame",
+              value=[frame_prefix, "map"]
+            ),
             IncludeLaunchDescription(
               PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
