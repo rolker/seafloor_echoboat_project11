@@ -78,14 +78,15 @@ local_costmap:
     ros__parameters:
       update_frequency: 5.0
       publish_frequency: 2.0
-      global_frame: <tf_prefix>/odom
+#      global_frame: <tf_prefix>/odom
+      global_frame: <tf_prefix>/map_tide
       robot_base_frame: <tf_prefix>/base_link
       rolling_window: true
-      width: 200
-      height: 200
+      width: 400
+      height: 400
       resolution: 0.25
       footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
-      plugins: ["chart_layer", "inflation_layer"]
+      plugins: ["chart_layer", "obstacle_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 0.05
@@ -93,12 +94,27 @@ local_costmap:
       chart_layer:
         plugin: "s57_layer::S57Layer"
         enabled: True
-        minimum_depth: 0.1
+        minimum_depth: 0.0
         maximum_caution_depth: 1.0
         overhead_clearance: 2.0
         update_timeout: 0.15
         s57_grids_namespace: <robot_namespace>/s57
-
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: segmentation
+        footprint_clearing_enabled: true
+        segmentation:
+          topic: <robot_namespace>/sensors/cameras/front/oak/segmentation/pointcloud
+          obstacle_max_range: 80.0
+          obstacle_min_range: 3.0
+          raytrace_max_range: 85.0
+          raytrace_min_range: 3.0
+          max_obstacle_height: 2.0
+          min_obstacle_height: 0.0
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
 
       always_send_full_costmap: True
 
@@ -107,7 +123,7 @@ global_costmap:
     ros__parameters:
       update_frequency: 1.0
       publish_frequency: 0.5
-      global_frame: <tf_prefix>/map
+      global_frame: <tf_prefix>/map_tide
       robot_base_frame: <tf_prefix>/base_link
       robot_radius: 1.5
       footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
@@ -116,7 +132,7 @@ global_costmap:
       rolling_window: true
       width: 4000
       height: 4000
-      plugins: ["chart_layer", "inflation_layer"]
+      plugins: ["chart_layer", "obstacle_layer", "inflation_layer"]
       chart_layer:
         plugin: "s57_layer::S57Layer"
         enabled: True
@@ -129,6 +145,22 @@ global_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 0.05
         inflation_radius: 150.0
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: segmentation
+        footprint_clearing_enabled: true
+        segmentation:
+          topic: <robot_namespace>/sensors/cameras/front/oak/segmentation/pointcloud
+          obstacle_max_range: 80.0
+          obstacle_min_range: 3.0
+          raytrace_max_range: 85.0
+          raytrace_min_range: 3.0
+          max_obstacle_height: 2.0
+          min_obstacle_height: 0.0
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
       always_send_full_costmap: True
 
 # The yaml_filename does not need to be specified since it going to be set by defaults in launch.
