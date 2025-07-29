@@ -78,7 +78,6 @@ local_costmap:
     ros__parameters:
       update_frequency: 5.0
       publish_frequency: 2.0
-#      global_frame: <tf_prefix>/odom
       global_frame: <tf_prefix>/map_tide
       robot_base_frame: <tf_prefix>/base_link
       rolling_window: true
@@ -86,7 +85,8 @@ local_costmap:
       height: 400
       resolution: 0.25
       footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
-      plugins: ["chart_layer", "obstacle_layer", "inflation_layer"]
+      #plugins: ["chart_layer", "obstacle_layer", "inflation_layer"]
+      plugins: ["chart_layer", "sea_surface_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 0.05
@@ -99,6 +99,12 @@ local_costmap:
         overhead_clearance: 2.0
         update_timeout: 0.15
         s57_grids_namespace: <robot_namespace>/s57
+      sea_surface_layer:
+        plugin: "sea_surface_layer::SeaSurfaceLayer"
+        enabled: True
+        segmentation_topic: <robot_namespace>/sensors/cameras/front/oak/segmentation
+        camera_info_topic: <robot_namespace>/sensors/cameras/front/oak/segmentation/camera_info
+        maximum_range: 150.0
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -106,9 +112,9 @@ local_costmap:
         footprint_clearing_enabled: true
         segmentation:
           topic: <robot_namespace>/sensors/cameras/front/oak/segmentation/pointcloud
-          obstacle_max_range: 80.0
+          obstacle_max_range: 150.0
           obstacle_min_range: 3.0
-          raytrace_max_range: 85.0
+          raytrace_max_range: 155.0
           raytrace_min_range: 3.0
           max_obstacle_height: 2.0
           min_obstacle_height: 0.0
