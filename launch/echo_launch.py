@@ -85,6 +85,7 @@ def generate_launch_description():
             "base_frame": [frame_prefix,"base_link"],
             "odom_frame": [frame_prefix, "odom"],
           }],
+          emulate_tty=True
         ),
         SetParameter(
           name="sea_surface_frame",
@@ -148,6 +149,7 @@ def generate_launch_description():
               ],
               respawn = True,
               respawn_delay = 5.0,
+              emulate_tty=True
             ),
           ]
         ),
