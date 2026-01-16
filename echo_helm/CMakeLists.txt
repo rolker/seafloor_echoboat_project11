@@ -12,13 +12,13 @@ find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(mavros REQUIRED)
 find_package(mavros_msgs REQUIRED)
-find_package(project11_msgs REQUIRED)
+find_package(marine_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 
 add_executable(${PROJECT_NAME}_node src/echo_helm_node.cpp)
 
-ament_target_dependencies(${PROJECT_NAME}_node geometry_msgs mavros mavros_msgs project11_msgs rclcpp rclcpp_lifecycle)
+ament_target_dependencies(${PROJECT_NAME}_node geometry_msgs mavros mavros_msgs marine_interfaces rclcpp rclcpp_lifecycle)
 
 install(TARGETS ${PROJECT_NAME}_node
   DESTINATION lib/${PROJECT_NAME}
