@@ -8,7 +8,7 @@
 
 #include "std_msgs/msg/bool.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
-#include "project11_msgs/msg/heartbeat.hpp"
+#include "marine_interfaces/msg/heartbeat.hpp"
 #include <mavros_msgs/srv/command_bool.hpp>
 #include <mavros_msgs/srv/set_mode.hpp>
 #include <mavros_msgs/msg/state.hpp>
@@ -40,13 +40,13 @@ public:
     get_parameter("rc_mode", rc_mode_);
     RCLCPP_INFO_STREAM(get_logger(), "RC mode: " << rc_mode_);
 
-    status_publisher_ = create_publisher<project11_msgs::msg::Heartbeat> ("project11/status/helm", 10);
+    status_publisher_ = create_publisher<marine_interfaces::msg::Heartbeat> ("marine_autonomy/status/helm", 10);
     
     cmd_vel_publisher_ = create_publisher<geometry_msgs::msg::TwistStamped>("mavros/setpoint_velocity/cmd_vel", 10);
 
     rc_override_publisher_ = create_publisher<mavros_msgs::msg::OverrideRCIn>("mavros/rc/override", 1);
 
-    cmd_vel_subscription_ = create_subscription<geometry_msgs::msg::TwistStamped>("project11/control/cmd_vel", 10, std::bind(&EchoHelm::cmdVelCallback, this, std::placeholders::_1));
+    cmd_vel_subscription_ = create_subscription<geometry_msgs::msg::TwistStamped>("marine_autonomy/control/cmd_vel", 10, std::bind(&EchoHelm::cmdVelCallback, this, std::placeholders::_1));
 
     standby_subscription_ = create_subscription<std_msgs::msg::Bool>("piloting_mode/standby/active", 5, std::bind(&EchoHelm::standbyCallback, this, std::placeholders::_1));
     
@@ -98,7 +98,7 @@ private:
 
   bool rc_mode_ = false;
 
-  rclcpp::Publisher<project11_msgs::msg::Heartbeat>::SharedPtr status_publisher_;
+  rclcpp::Publisher<marine_interfaces::msg::Heartbeat>::SharedPtr status_publisher_;
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_publisher_;
   rclcpp::Publisher<mavros_msgs::msg::OverrideRCIn>::SharedPtr rc_override_publisher_;
 
@@ -254,12 +254,12 @@ private:
 
   void stateCallback(const mavros_msgs::msg::State& inmsg)
   {
-    project11_msgs::msg::Heartbeat hb;
+    marine_interfaces::msg::Heartbeat hb;
     hb.header = inmsg.header;
 
-    project11_msgs::msg::KeyValue kv;
+    marine_interfaces::msg::KeyValue kv;
 
-    kv.key = "project11_standby";
+    kv.key = "marine_autonomy_standby";
     kv.value = boolToString(standby_);
     hb.values.push_back(kv);
     

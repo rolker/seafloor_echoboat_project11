@@ -4,7 +4,7 @@
   <arg name="enableBridge" default="true"/>
   
 
-  <include file="$(find project11)/launch/operator_core.launch">
+  <include file="$(find marine_autonomy)/launch/operator_core.launch">
     <arg name="namespace" value="$(arg namespace)"/>
     <arg name="robotNamespace" value="$(arg robotNamespace)"/>
     <arg name="enableBridge" value="$(arg enableBridge)"/>

@@ -5,7 +5,7 @@
   <arg name="rqt" default="false"/>
   <arg name="dual_camp" default="false"/>
 
-  <include file="$(find project11)/launch/operator_ui.launch">
+  <include file="$(find marine_autonomy)/launch/operator_ui.launch">
     <arg name="namespace" value="$(arg namespace)"/>
     <arg name="robotNamespace" value="$(arg robotNamespace)"/>
     <arg name="backgroundChart" value="$(arg backgroundChart)"/>
