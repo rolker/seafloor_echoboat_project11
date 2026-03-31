@@ -40,13 +40,13 @@ public:
     get_parameter("rc_mode", rc_mode_);
     RCLCPP_INFO_STREAM(get_logger(), "RC mode: " << rc_mode_);
 
-    status_publisher_ = create_publisher<marine_interfaces::msg::Heartbeat> ("marine_autonomy/status/helm", 10);
+    status_publisher_ = create_publisher<marine_interfaces::msg::Heartbeat> ("marine/status/helm", 10);
     
     cmd_vel_publisher_ = create_publisher<geometry_msgs::msg::TwistStamped>("mavros/setpoint_velocity/cmd_vel", 10);
 
     rc_override_publisher_ = create_publisher<mavros_msgs::msg::OverrideRCIn>("mavros/rc/override", 1);
 
-    cmd_vel_subscription_ = create_subscription<geometry_msgs::msg::TwistStamped>("marine_autonomy/control/cmd_vel", 10, std::bind(&EchoHelm::cmdVelCallback, this, std::placeholders::_1));
+    cmd_vel_subscription_ = create_subscription<geometry_msgs::msg::TwistStamped>("marine/control/cmd_vel", 10, std::bind(&EchoHelm::cmdVelCallback, this, std::placeholders::_1));
 
     standby_subscription_ = create_subscription<std_msgs::msg::Bool>("piloting_mode/standby/active", 5, std::bind(&EchoHelm::standbyCallback, this, std::placeholders::_1));
     
