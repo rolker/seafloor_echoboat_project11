@@ -10,7 +10,7 @@ bt_task_navigator:
     action_server_result_timeout: 900.0
     navigators: ["run_tasks",]
     run_tasks:
-      plugin: "project11_navigation::TaskNavigator"
+      plugin: "marine_nav_bt_task_navigator::TaskNavigator"
       debug: false
     # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
     # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
@@ -20,7 +20,7 @@ bt_task_navigator:
     # plugin_lib_names is used to add custom BT plugins to the executor (vector of strings).
     # Built-in plugins are added automatically
     plugin_lib_names: 
-      - project11_navigation_bt_plugins
+      - marine_nav_behavior_tree_bt_plugins
 
     error_code_names:
       - compute_path_error_code
@@ -60,7 +60,7 @@ controller_server:
       xy_goal_tolerance: 4.5
       yaw_goal_tolerance: 5.0
     FollowPath:
-      plugin: "project11_navigation::controllers::CrabbingPathFollower"
+      plugin: "marine_nav_crabbing_path_follower::CrabbingPathFollower"
       default_speed: 0.75
       visualization: true
       pid:
@@ -235,7 +235,7 @@ behavior_server:
     assisted_teleop:
       plugin: "nav2_behaviors::AssistedTeleop"
     hover:
-      plugin: "project11_navigation::Hover"
+      plugin: "marine_nav_behaviors::Hover"
       minimum_radius: 2.5
       maximum_radius: 10.0
       maximum_speed: 1.0
