@@ -86,7 +86,8 @@ local_costmap:
       resolution: 0.25
       footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
       #plugins: ["chart_layer", "obstacle_layer", "inflation_layer"]
-      plugins: ["chart_layer", "sea_surface_layer", "inflation_layer"]
+      #plugins: ["chart_layer", "sea_surface_layer", "inflation_layer"]
+      plugins: ["chart_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 0.05
@@ -99,6 +100,7 @@ local_costmap:
         overhead_clearance: 2.0
         update_timeout: 0.15
         s57_grids_namespace: <robot_namespace>/s57
+        chart_datum_frame: <tf_prefix>/chart_datum
       sea_surface_layer:
         plugin: "sea_surface_layer::SeaSurfaceLayer"
         enabled: True
@@ -138,7 +140,8 @@ global_costmap:
       rolling_window: true
       width: 4000
       height: 4000
-      plugins: ["chart_layer", "obstacle_layer", "inflation_layer"]
+      # plugins: ["chart_layer", "obstacle_layer", "inflation_layer"]
+      plugins: ["chart_layer", "inflation_layer"]
       chart_layer:
         plugin: "s57_layer::S57Layer"
         enabled: True
@@ -147,6 +150,7 @@ global_costmap:
         overhead_clearance: 2.0
         update_timeout: 0.75
         s57_grids_namespace: <robot_namespace>/s57
+        chart_datum_frame: <tf_prefix>/chart_datum
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 0.05
