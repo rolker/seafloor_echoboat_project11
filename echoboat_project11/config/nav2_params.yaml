@@ -64,14 +64,25 @@ controller_server:
       default_speed: 0.75
       visualization: true
       pid:
-        upper_limit: 90.0
-        lower_limit: -90.0
-        windup_limit: 30.0
-        kp: 20.0
-        ki: 0.5
-        kd: 0.6
-        publish_debug: true
-
+        # upper_limit: 90.0
+        # lower_limit: -90.0
+        # windup_limit: 30.0
+        # kp: 20.0
+        # ki: 0.5
+        # kd: 0.6
+        # publish_debug: true
+        # outputs crab angle (deg) to minimize cross-track error (m)
+        # IzzyBoat-validated magnitude (kp=20 from f3aef48, Jun 2025) with
+        # sign flipped to match the new marine_nav_crabbing_path_follower
+        # convention. Ben sim uses gentler p=-6.                               
+        p: -20.0
+        i: -0.5
+        d: -0.6
+        i_clamp_max: 30.0
+        i_clamp_min: -30.0
+        u_clamp_max: 90.0
+        u_clamp_min: -90.0
+        activate_state_publisher: true    
 
 local_costmap:
   local_costmap:
@@ -101,6 +112,7 @@ local_costmap:
         update_timeout: 0.15
         s57_grids_namespace: <robot_namespace>/s57
         chart_datum_frame: <tf_prefix>/chart_datum
+        sea_surface_frame: <tf_prefix>/map_tide
       sea_surface_layer:
         plugin: "sea_surface_layer::SeaSurfaceLayer"
         enabled: True
@@ -151,6 +163,7 @@ global_costmap:
         update_timeout: 0.75
         s57_grids_namespace: <robot_namespace>/s57
         chart_datum_frame: <tf_prefix>/chart_datum
+        sea_surface_frame: <tf_prefix>/map_tide
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 0.05
