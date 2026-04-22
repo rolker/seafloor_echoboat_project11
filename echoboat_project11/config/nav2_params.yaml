@@ -109,7 +109,7 @@ local_costmap:
         minimum_depth: 0.0
         maximum_caution_depth: 1.0
         overhead_clearance: 2.0
-        update_timeout: 0.15
+        update_timeout: 0.2
         s57_grids_namespace: <robot_namespace>/s57
         chart_datum_frame: <tf_prefix>/chart_datum
         sea_surface_frame: <tf_prefix>/map_tide
