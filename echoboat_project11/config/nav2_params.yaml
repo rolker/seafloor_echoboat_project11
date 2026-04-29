@@ -61,7 +61,7 @@ controller_server:
       yaw_goal_tolerance: 5.0
     FollowPath:
       plugin: "marine_nav_crabbing_path_follower::CrabbingPathFollower"
-      default_speed: 0.75
+      default_speed: 1.5
       visualization: true
       pid:
         # upper_limit: 90.0
