@@ -96,9 +96,17 @@ local_costmap:
       height: 400
       resolution: 0.25
       footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
-      #plugins: ["chart_layer", "obstacle_layer", "inflation_layer"]
-      #plugins: ["chart_layer", "sea_surface_layer", "inflation_layer"]
-      plugins: ["chart_layer", "inflation_layer"]
+      # Required build dependency: the `sea_surface_layer::SeaSurfaceLayer`
+      # plugin lives in the `sea_surface_segmentation` package (sensors_ws
+      # layer). Deployments using this config must have sensors_ws built —
+      # otherwise pluginlib will fail to load the layer and the local_costmap
+      # bringup will fail hard.
+      plugins: ["chart_layer",
+                "sea_surface_layer_forward",
+                "sea_surface_layer_port",
+                "sea_surface_layer_starboard",
+                "sea_surface_layer_aft",
+                "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 0.05
@@ -113,11 +121,33 @@ local_costmap:
         s57_grids_namespace: <robot_namespace>/s57
         chart_datum_frame: <tf_prefix>/chart_datum
         sea_surface_frame: <tf_prefix>/map_tide
-      sea_surface_layer:
+      # Four sea_surface_layer instances, one per OAK direction. Bizzy
+      # publishes on oak_forward/port/starboard/aft; boats without a
+      # given camera produce no segmentation traffic and the matching
+      # layer stays at NO_INFORMATION (silent no-op).
+      sea_surface_layer_forward:
         plugin: "sea_surface_layer::SeaSurfaceLayer"
         enabled: True
-        segmentation_topic: <robot_namespace>/sensors/cameras/front/oak/segmentation
-        camera_info_topic: <robot_namespace>/sensors/cameras/front/oak/segmentation/camera_info
+        segmentation_topic: <robot_namespace>/sensors/cameras/oak_forward/segmentation
+        camera_info_topic: <robot_namespace>/sensors/cameras/oak_forward/segmentation/camera_info
+        maximum_range: 150.0
+      sea_surface_layer_port:
+        plugin: "sea_surface_layer::SeaSurfaceLayer"
+        enabled: True
+        segmentation_topic: <robot_namespace>/sensors/cameras/oak_port/segmentation
+        camera_info_topic: <robot_namespace>/sensors/cameras/oak_port/segmentation/camera_info
+        maximum_range: 150.0
+      sea_surface_layer_starboard:
+        plugin: "sea_surface_layer::SeaSurfaceLayer"
+        enabled: True
+        segmentation_topic: <robot_namespace>/sensors/cameras/oak_starboard/segmentation
+        camera_info_topic: <robot_namespace>/sensors/cameras/oak_starboard/segmentation/camera_info
+        maximum_range: 150.0
+      sea_surface_layer_aft:
+        plugin: "sea_surface_layer::SeaSurfaceLayer"
+        enabled: True
+        segmentation_topic: <robot_namespace>/sensors/cameras/oak_aft/segmentation
+        camera_info_topic: <robot_namespace>/sensors/cameras/oak_aft/segmentation/camera_info
         maximum_range: 150.0
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
