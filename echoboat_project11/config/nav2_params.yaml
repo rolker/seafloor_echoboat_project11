@@ -96,6 +96,11 @@ local_costmap:
       height: 400
       resolution: 0.25
       footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
+      # Required build dependency: the `sea_surface_layer::SeaSurfaceLayer`
+      # plugin lives in the `sea_surface_segmentation` package (sensors_ws
+      # layer). Deployments using this config must have sensors_ws built —
+      # otherwise pluginlib will fail to load the layer and the local_costmap
+      # bringup will fail hard.
       plugins: ["chart_layer",
                 "sea_surface_layer_forward",
                 "sea_surface_layer_port",
