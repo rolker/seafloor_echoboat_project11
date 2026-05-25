@@ -242,7 +242,7 @@ planner_server:
       allow_unknown: true
       change_penalty: 0.5
       cost_penalty: 10.0
-      minimum_turning_radius: 3.0
+      minimum_turning_radius: 1.5  # was 3.0; boats turn far tighter (rolker/unh_echoboats_project11#124 §2)
       debug_visualizations: false
       max_iterations: -1
       max_on_approach_iterations: -1
