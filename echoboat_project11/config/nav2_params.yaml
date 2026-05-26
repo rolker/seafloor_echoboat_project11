@@ -328,7 +328,7 @@ velocity_smoother:
 
 collision_monitor:
   ros__parameters:
-    base_frame_id: "base_footprint"
+    base_frame_id: <tf_prefix>/base_link
     odom_frame_id: <tf_prefix>/odom
     cmd_vel_in_topic: "cmd_vel_smoothed"
     cmd_vel_out_topic: "piloting_mode/autonomous/cmd_vel"
@@ -340,21 +340,39 @@ collision_monitor:
     stop_pub_timeout: 2.0
     # Polygons represent zone around the robot for "stop", "slowdown" and "limit" action types,
     # and robot footprint for "approach" action type.
-    polygons: ["FootprintApproach"]
-    FootprintApproach:
+    # Forward-arc zones (single forward camera), base_link x-fwd / y-port.
+    # Tuned for boat momentum: passive coast-down ~10-15 m from ~1.5 m/s
+    # cruise (#124 §2 / PR #172), so slowdown stands off well beyond stopping
+    # distance to bleed speed early; stop is last-resort. CM has no reverse
+    # action. Starting geometry — refine in sim + Phase C trigger catalog (#169).
+    polygons: ["CollisionSlowdown", "CollisionStop"]
+    CollisionSlowdown:
       type: "polygon"
-      action_type: "approach"
-      footprint_topic: "local_costmap/published_footprint"
-      time_before_collision: 1.2
-      simulation_time_step: 0.1
-      min_points: 6
-      visualize: False
+      points: "[[20.0, 3.0], [20.0, -3.0], [0.0, -3.0], [0.0, 3.0]]"
+      action_type: "slowdown"
+      slowdown_ratio: 0.3
+      min_points: 4
+      visualize: True
+      polygon_pub_topic: "collision_monitor/slowdown_polygon"
       enabled: True
-    observation_sources: ["scan"]
-    scan:
-      type: "scan"
-      topic: "scan"
-      min_height: 0.15
+    CollisionStop:
+      type: "polygon"
+      points: "[[5.0, 2.0], [5.0, -2.0], [0.0, -2.0], [0.0, 2.0]]"
+      action_type: "stop"
+      min_points: 5
+      visualize: True
+      polygon_pub_topic: "collision_monitor/stop_polygon"
+      enabled: True
+    observation_sources: ["reflex_cloud"]
+    # Reflex PointCloud2 from the forward-OAK segmentation adapter
+    # (perception#17), on the canonical per-boat topic (bizzy:
+    # unh_echoboats_project11#178). Sparse (~tens of pts). Height bracket
+    # spans the projected plane (z~=0 in base_link_level) plus the pitch-
+    # induced z-shift of far points once transformed into base_link.
+    reflex_cloud:
+      type: "pointcloud"
+      topic: "collision_monitor/pointcloud"
+      min_height: -2.0
       max_height: 2.0
       enabled: True
 
