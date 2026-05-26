@@ -31,32 +31,34 @@ topic `collision_monitor/pointcloud` (→ `/bizzy/collision_monitor/pointcloud`)
    reflex_cloud:
      type: "pointcloud"
      topic: "collision_monitor/pointcloud"
-     min_height: -0.5        # cloud is flat at plane_z≈0 in base_link_level;
-     max_height:  0.5        # bracket it generously (hull-floor vs waterline)
+     min_height: -2.0        # spans the projected plane (z≈0 in base_link_level)
+     max_height:  2.0        # + pitch-induced z-shift of far points in base_link
      enabled: True
    ```
-   (Keep `FootprintApproach` as-is, or see step 2.) The shared-params change is
-   a no-op for izzy until it sets `publish_pointcloud: true` and remaps its
-   reflex cloud to the same canonical topic — document inline.
+   The shared-params change is a no-op for izzy until it sets
+   `publish_pointcloud: true` and remaps its reflex cloud to the same canonical
+   topic — documented inline. **Done.**
 
-2. **Tune polygons for boat momentum** (`nav2_params.yaml:343-352`). Passive
-   coast-down is ~10–15 m from ~1.5 m/s cruise (#124 §2 / PR #172). Favor
-   **slowdown/limit over hard stop**, forward-arc only. Starting geometry
-   (forward +x, ±beam in y; tune in sim/field):
-   - a **`slowdown`** (or `limit`) polygon covering the forward sector out to
-     **well beyond 15 m** (e.g. x∈[0, 20] m, |y|≤ ~3 m) — scales velocity down
-     on first detection so the boat bleeds speed within coast-down distance;
-   - a close-in **`stop`** polygon (e.g. x∈[0, 3] m) as last resort.
-   `min_points` set to the cloud's realistic presence threshold (the reflex
-   cloud is sparse — ~tens of points; Phase A measured ≤~53). Whether to add a
-   reverse/back-off action for obstacles already inside coast-down distance is
-   an **open question** (see below).
+2. **Tune polygons for boat momentum** — **DONE** (geometry is a starting
+   point, refine in sim). Passive coast-down is ~10–15 m from ~1.5 m/s cruise
+   (#124 §2 / PR #172), so favor slowdown over hard stop, forward-arc only.
+   `FootprintApproach` (the old default, blind on the nonexistent `scan`) is
+   **replaced** by two explicit forward-sector polygons:
+   - `CollisionSlowdown` — x∈[0, 20] m, |y|≤3 m, `slowdown_ratio: 0.3`,
+     `min_points: 4`. Bleeds speed well before stopping distance.
+   - `CollisionStop` — x∈[0, 5] m, |y|≤2 m, `min_points: 5`. Last resort.
 
-3. **Fix `base_frame_id`** (`nav2_params.yaml:331`): currently hardcoded
-   `"base_footprint"` with no `<tf_prefix>`. The monitor transforms
-   observations into `base_frame_id`, so it must be a real frame in bizzy's TF
-   tree. Verify and, if needed, switch to `<tf_prefix>/base_link` (the
-   reflex cloud is in `bizzy/base_link_level`; confirm the chain resolves).
+   `min_points` reflects the sparse reflex cloud (~tens of pts; Phase A measured
+   ≤~53). **Reverse-action question resolved**: nav2_collision_monitor has no
+   reverse action (stop/slowdown/limit/approach only), so the early-standoff
+   slowdown zone *is* the momentum mechanism.
+
+3. **Fix `base_frame_id`** — **DONE**. Was hardcoded `"base_footprint"` (no
+   prefix, frame absent from the boat TF trees); changed to
+   `<tf_prefix>/base_link`, matching every other frame in this file
+   (costmaps + docking). The reflex cloud (`bizzy/base_link_level`) is
+   TF-transformed into it; small pitch/roll error is folded into the height
+   bracket + polygon-sizing budget.
 
 4. **Sim-verify before field** (non-negotiable per #170): bring up nav2 +
    collision_monitor in sim, inject/replay a forward reflex cloud, and confirm
@@ -92,19 +94,30 @@ topic `collision_monitor/pointcloud` (→ `/bizzy/collision_monitor/pointcloud`)
 | If we change... | Also update... | Included? |
 |---|---|---|
 | Shared `collision_monitor` observation source | izzy opts in later (publish_pointcloud + remap) — no-op until then | Documented inline |
-| Polygon block (shared) | If bizzy/izzy tuning must diverge, add a per-boat override | Flagged — open question |
-| `base_frame_id` | Confirm frame exists in bizzy TF tree | Step 3 |
+| Polygon block (shared) | If bizzy/izzy tuning must diverge, add a per-boat override | Kept shared (revisit if needed) |
+| `base_frame_id` | Use a frame present in both boats' TF trees | Done — `<tf_prefix>/base_link` |
 
 ## Open Questions
 
-- [ ] **Reverse vs stop inside coast-down distance** — for an obstacle already
-  within ~15 m, zero-throttle still coasts into it. Add a reverse/back-off
-  action, or accept slowdown+stop and rely on the standoff zone catching
-  obstacles earlier? (Active crash-stop braking is uncharacterized — #88.)
-- [ ] **Shared vs per-boat polygons** — keep one shared polygon block, or does
-  bizzy's momentum/size warrant a bizzy-specific override now?
-- [ ] **Polygon geometry numbers** — starting values above are estimates;
-  finalize against sim + the Phase C offline trigger catalog (#169).
+- [x] **Reverse vs stop** — resolved: CM has no reverse action; rely on the
+  early-standoff slowdown zone. (Active crash-stop braking still uncharacterized
+  — #88.)
+- [x] **Shared vs per-boat polygons** — resolved for now: kept shared (izzy is a
+  no-op until it opts in). Revisit only if bizzy/izzy tuning must diverge.
+- [ ] **Polygon geometry + slowdown_ratio + min_points + height bracket** — the
+  landed values (20 m slowdown / 5 m stop / ratio 0.3 / ±2 m height) are
+  estimates. Finalize against **sim verification** and the Phase C offline
+  trigger catalog (#169). This is the gate before the PR leaves draft.
+
+## Implementation Notes
+
+- Replaced the default `FootprintApproach` (approach-type, bound to the
+  nonexistent `scan` source) with explicit `CollisionSlowdown` + `CollisionStop`
+  polygons. Rationale: the issue calls for slowdown-first with a realistic
+  standoff; explicit forward-sector slowdown/stop zones are easier to reason
+  about and tune for boat momentum than approach-type time-to-collision on a
+  sparse, forward-only cloud. No izzy regression — its monitor was already blind
+  (same shared `scan` source it never publishes).
 
 ## Estimated Scope
 
