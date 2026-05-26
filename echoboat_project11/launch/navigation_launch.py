@@ -46,7 +46,7 @@ def generate_launch_description():
         'smoother_server',
         'planner_server',
         'behavior_server',
-        'velocity_smoother',
+        # velocity_smoother removed from the active path (#170) — see node block below
         'collision_monitor',
         #'bt_navigator',
         'manda_coverage',
@@ -137,8 +137,9 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings + [('cmd_vel', 'piloting_mode/autonomous/cmd_vel')],
-                #remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
+                # Route controller output into the Collision Monitor via cmd_vel_nav,
+                # not straight to the helm topic, so the monitor can gate it (#170).
+                remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
                 namespace="",
                 emulate_tty=True
             ),
@@ -177,8 +178,9 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings + [('cmd_vel', 'piloting_mode/autonomous/cmd_vel')],
-                # remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
+                # Route recovery-behavior cmd_vel through the Collision Monitor too,
+                # via cmd_vel_nav (#170).
+                remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
                 namespace="",
                 emulate_tty=True
             ),
@@ -221,20 +223,14 @@ def generate_launch_description():
                 namespace="",
                 emulate_tty=True
             ),
-            LifecycleNode(
-                package='nav2_velocity_smoother',
-                executable='velocity_smoother',
-                name='velocity_smoother',
-                output='screen',
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings
-                + [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'piloting_mode/autonomous/cmd_vel')],
-                namespace="",
-                emulate_tty=True
-            ),
+            # velocity_smoother intentionally removed from the active path (#170).
+            # The cmd_vel filter chain is deliberately disconnected on these boats,
+            # so the controller feeds the Collision Monitor directly via cmd_vel_nav.
+            # Leaving the smoother here would put a second publisher on
+            # piloting_mode/autonomous/cmd_vel, competing with the monitor. To
+            # re-enable smoothing later, restore this node with its output remapped
+            # to cmd_vel_smoothed and set collision_monitor cmd_vel_in_topic back to
+            # cmd_vel_smoothed (and re-add 'velocity_smoother' to lifecycle_nodes).
             LifecycleNode(
                 package='nav2_collision_monitor',
                 executable='collision_monitor',
@@ -273,6 +269,14 @@ def generate_launch_description():
         ],
     )
 
+    # NOTE (#170): this composition path mirrors the non-composition routing —
+    # controller/behaviors publish cmd_vel_nav and the Collision Monitor gates it
+    # (cmd_vel_in_topic: cmd_vel_nav -> cmd_vel_out_topic:
+    # piloting_mode/autonomous/cmd_vel, both from nav2_params.yaml). velocity_smoother
+    # is omitted here too (the cmd_vel filter chain is deliberately disconnected on
+    # these boats; it is also absent from lifecycle_nodes above). This path stays
+    # UNUSED in the field (use_composition=False), but is kept consistent so enabling
+    # composition cannot silently reintroduce the gating bypass.
     load_composable_nodes = GroupAction(
         condition=IfCondition(use_composition),
         actions=[
@@ -330,24 +334,15 @@ def generate_launch_description():
                         parameters=[configured_params],
                         remappings=remappings,
                     ),
-                    ComposableNode(
-                        package='nav2_velocity_smoother',
-                        plugin='nav2_velocity_smoother::VelocitySmoother',
-                        name='velocity_smoother',
-                        parameters=[configured_params],
-                        remappings=remappings
-                        + [
-                            ('cmd_vel', 'cmd_vel_nav'),
-                            ('cmd_vel_smoothed', 'piloting_mode/autonomous/cmd_vel')
-                        ],
-                    ),
+                    # velocity_smoother intentionally omitted (see NOTE above) —
+                    # mirrors its removal from the non-composition path so the
+                    # Collision Monitor is the sole publisher on the helm topic.
                     ComposableNode(
                         package='nav2_collision_monitor',
                         plugin='nav2_collision_monitor::CollisionMonitor',
                         name='collision_monitor',
                         parameters=[configured_params],
-                        remappings=remappings
-                        + [('cmd_vel', 'piloting_mode/autonomous/cmd_vel')],
+                        remappings=remappings,
                     ),
                     ComposableNode(
                         package='opennav_docking',

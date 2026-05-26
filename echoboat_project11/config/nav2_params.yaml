@@ -330,7 +330,7 @@ collision_monitor:
   ros__parameters:
     base_frame_id: <tf_prefix>/base_link
     odom_frame_id: <tf_prefix>/odom
-    cmd_vel_in_topic: "cmd_vel_smoothed"
+    cmd_vel_in_topic: "cmd_vel_nav"          # controller/behaviors publish here; monitor gates → out (#170)
     cmd_vel_out_topic: "piloting_mode/autonomous/cmd_vel"
     enable_stamped_cmd_vel: true
     state_topic: "collision_monitor_state"
