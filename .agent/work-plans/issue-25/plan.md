@@ -105,9 +105,20 @@ topic `collision_monitor/pointcloud` (→ `/bizzy/collision_monitor/pointcloud`)
 - [x] **Shared vs per-boat polygons** — resolved for now: kept shared (izzy is a
   no-op until it opts in). Revisit only if bizzy/izzy tuning must diverge.
 - [ ] **Polygon geometry + slowdown_ratio + min_points + height bracket** — the
-  landed values (20 m slowdown / 5 m stop / ratio 0.3 / ±2 m height) are
-  estimates. Finalize against **sim verification** and the Phase C offline
-  trigger catalog (#169). This is the gate before the PR leaves draft.
+  landed values (20 m slowdown / 5 m stop / ratio 0.3 / min_points 4–5 / ±2 m
+  height) are estimates. Finalize against **sim verification** and the Phase C
+  offline trigger catalog (#169). This is the gate before the PR leaves draft.
+  Two review signals to resolve empirically here:
+  - **min_points direction is contested** — the cross-model reviewers split:
+    one flagged 4–5 as too *high* (misses small/distant obstacles → false
+    negatives, the collision risk), the other as too *low* (noise → nuisance
+    survey stops). Sim/Phase-C data decides; bias toward sensitivity given the
+    motivating failure is missed obstacles.
+  - **Suddenly-appearing close obstacle** — slowdown-first only protects when
+    the obstacle is seen far out. An obstacle first detected inside ~5 m (sharp
+    turn, sudden surfacing) still coasts ~10–15 m past a `stop`. Inherent to
+    passive braking with no reverse (#88); consider a graduated inner slowdown
+    (e.g. 5–10 m at a lower ratio) during tuning rather than enlarging `stop`.
 
 ## Implementation Notes
 
