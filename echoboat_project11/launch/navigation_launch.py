@@ -269,11 +269,14 @@ def generate_launch_description():
         ],
     )
 
-    # NOTE (#170): this composition path is NOT updated for the Collision-Monitor
-    # rewire and is currently UNUSED on the project11 boats (use_composition=False).
-    # It still routes velocity_smoother -> piloting_mode/autonomous/cmd_vel, leaving
-    # the monitor's input orphaned (same bug fixed in the non-composition path
-    # above). Mirror the non-composition changes here before enabling composition.
+    # NOTE (#170): this composition path mirrors the non-composition routing —
+    # controller/behaviors publish cmd_vel_nav and the Collision Monitor gates it
+    # (cmd_vel_in_topic: cmd_vel_nav -> cmd_vel_out_topic:
+    # piloting_mode/autonomous/cmd_vel, both from nav2_params.yaml). velocity_smoother
+    # is omitted here too (the cmd_vel filter chain is deliberately disconnected on
+    # these boats; it is also absent from lifecycle_nodes above). This path stays
+    # UNUSED in the field (use_composition=False), but is kept consistent so enabling
+    # composition cannot silently reintroduce the gating bypass.
     load_composable_nodes = GroupAction(
         condition=IfCondition(use_composition),
         actions=[
@@ -331,24 +334,15 @@ def generate_launch_description():
                         parameters=[configured_params],
                         remappings=remappings,
                     ),
-                    ComposableNode(
-                        package='nav2_velocity_smoother',
-                        plugin='nav2_velocity_smoother::VelocitySmoother',
-                        name='velocity_smoother',
-                        parameters=[configured_params],
-                        remappings=remappings
-                        + [
-                            ('cmd_vel', 'cmd_vel_nav'),
-                            ('cmd_vel_smoothed', 'piloting_mode/autonomous/cmd_vel')
-                        ],
-                    ),
+                    # velocity_smoother intentionally omitted (see NOTE above) —
+                    # mirrors its removal from the non-composition path so the
+                    # Collision Monitor is the sole publisher on the helm topic.
                     ComposableNode(
                         package='nav2_collision_monitor',
                         plugin='nav2_collision_monitor::CollisionMonitor',
                         name='collision_monitor',
                         parameters=[configured_params],
-                        remappings=remappings
-                        + [('cmd_vel', 'piloting_mode/autonomous/cmd_vel')],
+                        remappings=remappings,
                     ),
                     ComposableNode(
                         package='opennav_docking',
