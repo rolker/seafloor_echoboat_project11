@@ -43,15 +43,17 @@ def merged_params(cfg_dir, model, instance_params=None):
             f"Unknown echoboat model '{model}': {overlay_path} not found "
             f"(expected nav2_params.<model>.yaml in {cfg_dir})"
         )
+    # `yaml.safe_load` returns None for an empty / comment-only file; treat such
+    # a layer as an empty (no-op) overlay rather than crashing in deep_merge.
     with open(os.path.join(cfg_dir, 'nav2_params.base.yaml')) as f:
-        merged = yaml.safe_load(f)
+        merged = yaml.safe_load(f) or {}
     with open(overlay_path) as f:
-        merged = deep_merge(merged, yaml.safe_load(f))
+        merged = deep_merge(merged, yaml.safe_load(f) or {})
     if instance_params:
         if not os.path.exists(instance_params):
             raise RuntimeError(f"instance_params file not found: {instance_params}")
         with open(instance_params) as f:
-            merged = deep_merge(merged, yaml.safe_load(f))
+            merged = deep_merge(merged, yaml.safe_load(f) or {})
     return merged
 
 

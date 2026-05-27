@@ -168,3 +168,22 @@ itself (last→first edge) and computes max-cost over traced edges (winding-inde
 - [ ] (suggestion, Copilot, won't-fix) footprint extent thresholds loose — by design (revert guard, not spec pin) — `test_param_compose.py`
 - [ ] (suggestion, Copilot) no schema validation in `deep_merge`/composed tree — step-1 mechanism, out of scope; footprint presence is tested — `param_compose.py`
 - [ ] (false positive, Copilot) footprint not closed / winding order — verified against Nav2 source; open rings correct, winding-independent — `nav2_params.240.yaml`
+
+## Review Triage — Copilot PR #29 backlog (autonomous, 2026-05-27)
+
+Triaged the unresolved Copilot threads carried from the earlier PR #29 rounds. Two were
+genuine robustness bugs in the composition mechanism and are now fixed (this commit); the rest
+are nits / already-dispositioned / verified false.
+
+### Findings
+- [x] (must-fix, Copilot) `python3-yaml` only a `<test_depend>` but imported at launch by
+      `param_compose.py` — added `<exec_depend>python3-yaml</exec_depend>` — `package.xml`
+- [x] (must-fix, Copilot) `merged_params()` crashes on an empty/comment-only layer
+      (`yaml.safe_load`→None→`deep_merge(...,None)`) — guard with `... or {}` at all three
+      load sites; added `test_empty_instance_overlay_is_noop` (13 pass) — `param_compose.py:47-54`
+- [ ] (nit, Copilot) `approve-with-suggestions` / heading vocabulary vs ADR-0013 in older
+      plan-review entries — cosmetic, left for the user/triage-reviews — `progress.md:20,27`
+- [ ] (stale, Copilot) "`Closes #3` on a plan-only PR" — no longer applies; PR now carries the
+      full implementation — `plan.md:6`
+- [ ] (dispositioned, Copilot ×2) `navigation_launch.py` base fallback omits hull params —
+      pre-existing, documented intentional for the rare standalone invocation — `navigation_launch.py:95-99`

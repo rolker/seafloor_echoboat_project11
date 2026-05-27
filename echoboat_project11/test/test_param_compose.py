@@ -138,6 +138,14 @@ def test_no_instance_overlay_matches_two_layer():
     assert merged_params(_CONFIG, '240', None) == merged_params(_CONFIG, '240')
 
 
+def test_empty_instance_overlay_is_noop(tmp_path):
+    """An empty / comment-only overlay (yaml.safe_load -> None) must merge as a
+    no-op, not crash in deep_merge."""
+    empty = tmp_path / 'empty.yaml'
+    empty.write_text('# only a comment\n')
+    assert merged_params(_CONFIG, '240', str(empty)) == merged_params(_CONFIG, '240')
+
+
 def test_missing_instance_overlay_raises():
     with pytest.raises(RuntimeError):
         merged_params(_CONFIG, '240', '/nonexistent/instance.yaml')
