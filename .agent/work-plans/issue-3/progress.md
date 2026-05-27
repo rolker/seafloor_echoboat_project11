@@ -197,6 +197,32 @@ once `izzyboat_launch.py` (in `unh_echoboats_project11`) passes `model:='160'` t
 Izzy isn't the next-deployment boat, so it's flagged for a decision rather than spawned as a
 new issue/PR. Until then Izzy gets the default (240) overlay.
 
+## Implementation — echo.yaml dead-navigator-block removal (2026-05-27)
+
+**Branch**: feature/issue-3 (PR #29). Decision (Roland): "just delete the dead block" — do
+*not* do the full echo.yaml base/hull split yet.
+
+**Finding that drove it** — verified where `echo.yaml`'s `/**/navigator:` block is actually
+consumed (Roland asked to double-check old-vs-current navigator):
+- It targets a node named `navigator` = the pre-BT **`marine_navigation`** standalone planner.
+  Its launch include in `marine_autonomy/launch/robot_core_launch.py` is **commented out**, and
+  the `marine_navigation` package **is no longer in the workspace** (only `unh_marine_navigation`'s
+  `marine_nav_*` packages exist).
+- The live navigator is **`bt_task_navigator`** (`marine_nav_bt_task_navigator`, runs
+  `run_tasks.xml`). Different node name → the `/**/navigator` params never attach to it.
+- `turn_radius` has **no consumer anywhere** in the workspace; `survey_lead_in_distance` likewise
+  (the live `lead_in_distance` in `manda_coverage/SurveyPath.cpp` is a different key/node).
+- So the plan's "3 inconsistent *live* hull/turn-radius copies" was partly wrong: the `echo.yaml`
+  `navigator.robot` copy is a **corpse**, not live drift. No reconcile + on-water validation needed.
+
+**Change**: deleted the entire `/**/navigator:` block (`echo.yaml`) — behavior-neutral (no
+consumer). Left a 2-line breadcrumb comment. The live `echo.yaml` blocks (`platform_sender`,
+`mru_transform`, `helm_manager`, `mavros`, `udp_bridge`) are untouched.
+
+**Deferred** (not this PR): the base/hull split of the live model-specific `echo.yaml` bits
+(`platform_sender` dims, `helm_manager` max_speed/yaw, `mavros` component_id). #3 stays partially
+open for that + the Izzy `model:=160` launch thread.
+
 ## Review Triage — Copilot PR #29 backlog (autonomous, 2026-05-27)
 
 Triaged the unresolved Copilot threads carried from the earlier PR #29 rounds. Two were
