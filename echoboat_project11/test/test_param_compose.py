@@ -118,3 +118,18 @@ def test_no_instance_overlay_matches_two_layer():
 def test_missing_instance_overlay_raises():
     with pytest.raises(RuntimeError):
         merged_params(_CONFIG, '240', '/nonexistent/instance.yaml')
+
+
+# --- base is rig-agnostic; sensor rig + reflex come from the instance overlay (#3 step 2) ---
+
+def test_base_has_no_sensor_rig_or_reflex():
+    with open(os.path.join(_CONFIG, 'nav2_params.base.yaml')) as f:
+        base = yaml.safe_load(f)
+    lc = _lc(base)
+    assert lc['plugins'] == ['chart_layer', 'inflation_layer']
+    assert not [k for k in lc if 'sea_surface' in k]
+    cm = base['collision_monitor']['ros__parameters']
+    # gating wiring stays; reflex zones/sources move to the instance overlay
+    assert cm['cmd_vel_in_topic'] == 'cmd_vel_nav'
+    assert cm['polygons'] == []
+    assert cm['observation_sources'] == []
