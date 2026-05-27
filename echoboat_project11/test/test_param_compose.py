@@ -162,6 +162,15 @@ def test_empty_instance_overlay_is_noop(tmp_path):
     assert merged_params(_CONFIG, '240', str(empty)) == merged_params(_CONFIG, '240')
 
 
+def test_non_mapping_overlay_raises_clear_error(tmp_path):
+    """A non-mapping top-level layer (list/scalar) raises a clear RuntimeError that
+    names the file, not a low-signal AttributeError from deep_merge."""
+    bad = tmp_path / 'bad.yaml'
+    bad.write_text('- not\n- a\n- mapping\n')
+    with pytest.raises(RuntimeError, match='must be a YAML mapping'):
+        merged_params(_CONFIG, '240', str(bad))
+
+
 def test_missing_instance_overlay_raises():
     with pytest.raises(RuntimeError):
         merged_params(_CONFIG, '240', '/nonexistent/instance.yaml')

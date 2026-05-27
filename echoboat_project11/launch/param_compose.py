@@ -27,6 +27,25 @@ def deep_merge(base, overlay):
     return out
 
 
+def _load_layer(path):
+    """Load one YAML param layer as a mapping.
+
+    An empty / comment-only file (``yaml.safe_load`` → ``None``) is treated as an
+    empty no-op layer. A non-mapping top level (list/scalar) is a config error and
+    raises a clear ``RuntimeError`` naming the file rather than a downstream
+    ``AttributeError`` from ``deep_merge``.
+    """
+    with open(path) as f:
+        data = yaml.safe_load(f)
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise RuntimeError(
+            f"param layer {path} must be a YAML mapping, got {type(data).__name__}"
+        )
+    return data
+
+
 def merged_params(cfg_dir, model, instance_params=None):
     """Return the merged param tree: base, then the per-model overlay, then an
     optional per-instance overlay (each later layer wins).
@@ -43,17 +62,12 @@ def merged_params(cfg_dir, model, instance_params=None):
             f"Unknown echoboat model '{model}': {overlay_path} not found "
             f"(expected nav2_params.<model>.yaml in {cfg_dir})"
         )
-    # `yaml.safe_load` returns None for an empty / comment-only file; treat such
-    # a layer as an empty (no-op) overlay rather than crashing in deep_merge.
-    with open(os.path.join(cfg_dir, 'nav2_params.base.yaml')) as f:
-        merged = yaml.safe_load(f) or {}
-    with open(overlay_path) as f:
-        merged = deep_merge(merged, yaml.safe_load(f) or {})
+    merged = _load_layer(os.path.join(cfg_dir, 'nav2_params.base.yaml'))
+    merged = deep_merge(merged, _load_layer(overlay_path))
     if instance_params:
         if not os.path.exists(instance_params):
             raise RuntimeError(f"instance_params file not found: {instance_params}")
-        with open(instance_params) as f:
-            merged = deep_merge(merged, yaml.safe_load(f) or {})
+        merged = deep_merge(merged, _load_layer(instance_params))
     return merged
 
 

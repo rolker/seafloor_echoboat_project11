@@ -241,3 +241,14 @@ are nits / already-dispositioned / verified false.
       full implementation — `plan.md:6`
 - [ ] (dispositioned, Copilot ×2) `navigation_launch.py` base fallback omits hull params —
       pre-existing, documented intentional for the rare standalone invocation — `navigation_launch.py:95-99`
+
+### Round 2 (Copilot auto-review after the step-3 / echo.yaml pushes)
+- [x] (suggestion, Copilot) `merged_params()` non-mapping layer → low-signal `AttributeError` —
+      added `_load_layer()` (None → {} no-op; non-dict → clear RuntimeError naming the file) +
+      `test_non_mapping_overlay_raises_clear_error`. 15 pass — `param_compose.py`
+- [x] (stale) `Closes #3` thread — resolved: PR body now says "Part of #3", does not auto-close.
+- [ ] (dispositioned, recurring) `navigation_launch.py` standalone fallback omits hull params —
+      documented intentional (always overridden by `nav2_bringup_launch.py`); surfaced to Roland
+      as a separate small task if standalone launch should be fully supported — `navigation_launch.py:95-99`
+- [ ] (nit, won't-fix-now) ADR-0013 verdict vocabulary in older plan-review entries — cosmetic
+      historical entries; left for the user — `progress.md:20,27`
