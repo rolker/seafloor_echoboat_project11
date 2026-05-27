@@ -98,8 +98,8 @@ placeholder-equal until step 3 — threading `model=160` to izzy is a step-3 ite
 - [ ] **Step 3:** real 160 values into `nav2_params.160.yaml` from
       `izzyboat_project11/measurements.md` (turn radius 3–4 m, top ~2 m/s, accel ~0.6,
       rot ~1.5 rad/s, smaller footprint) + thread `model=160` to izzy via `echo_launch.py`.
-- [ ] **Step 4:** 240 re-tune from `bizzyboat.urdf.xacro` geometry + measured dynamics
-      (behavior change → on-water validation; timing vs June 4 freeze = open question).
+- [x] **Step 4:** 240 footprint re-tuned (see Implementation entry below). Dynamics knobs
+      needed no change (already correct via #124). **On-water validation still pending.**
 - [ ] `echo.yaml` model-specific bits (platform dims, helm max_speed/yaw, navigator block,
       path_follower pid) + consolidate the duplicated hull-dim/turn-radius/pid homes (deferred).
 
@@ -108,3 +108,63 @@ placeholder-equal until step 3 — threading `model=160` to izzy is a step-3 ite
 
 **Active worktrees (not removed):** `issue-seafloor_echoboat_project11-3`,
 `issue-unh_echoboats_project11-184`.
+
+## Implementation — Step 4: 240 footprint re-tune (2026-05-27)
+
+**Branch**: feature/issue-3 (folded into PR #29 — user's call; #29 is therefore no longer
+"240 ≡ today", and the structural split + this behavior change now ship together).
+
+**What changed** (`config/nav2_params.240.yaml`):
+- `footprint` (local + global costmap): Izzy-inherited `[[1.0,0],[0.0,0.3],[-0.5,0.3],
+  [-0.5,-0.3],[0.0,-0.3],[1.0,0]]` (1.5 × 0.6 m) → `[[0.95,0.5],[0.95,-0.5],[-1.0,-0.5],
+  [-1.0,0.5]]` (~1.95 × 1.0 m bounding box of the real 240 hull).
+
+**Why this is the whole re-tune** (cross-checked vs current-corrected
+`unh_echoboats_project11/docs/bizzyboat_performance.md`, #124 §2, 7 deployments, + URDF):
+- The footprint was the only genuinely Izzy-inherited, hull-wrong value. Source:
+  `bizzyboat.urdf.xacro` — side bumpers 1.80 m @ y=±0.47 (~0.94 m beam), stern AutoNav box
+  x≈−0.99, fwd camera/rail overhang x≈+1.05 (up high; box sits under it with margin).
+  Roland chose the hull-box-+-margin option (vs include-overhang / tapered hexagon).
+- **Already correct, untouched**: `minimum_turning_radius 1.5` (matches measured ~1.5 m @
+  cruise), `behavior_server.max_rotational_vel 1.0` (matches ~0.9 rad/s peak pivot + raised
+  helm cap), `FollowPath.default_speed 1.5` in base (matches cruise 1.52 m/s). These were
+  the #124 *general* corrections, not Izzy inheritance.
+- **Vestigial**: `global_costmap.robot_radius 1.5` — ignored when a footprint polygon is set;
+  left as-is, flagged for the echo.yaml consolidation step.
+- **Deliberately not re-tuned**: `velocity_smoother` — the performance doc states it is
+  disconnected on Bizzy and re-tuning is deferred ("no action unless needed"). Out of scope.
+
+**Tests**: `test/test_param_compose.py` — added `test_240_footprint_matches_real_hull`
+(asserts ≥1.8 m × ≥0.9 m extent on both costmaps + local==global; catches a silent revert to
+the Izzy 1.5 × 0.6 footprint). Docstring updated (240 no longer byte-equals pre-split for the
+footprint). 12 passed.
+
+**⚠ Behavior change → on-water validation pending**: a bigger footprint widens planned berths
+and may reject tighter passages. Not yet runtime-tested. Recommended before PR #29 merges /
+reaches the daily boat.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-05-27 11:36 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+**Verdict**: approved
+
+**Branch**: feature/issue-3 at `4a35052` + working tree (step-4 footprint re-tune)
+**Mode**: pre-push
+**Depth**: Standard (reason: deployed boat's autonomous nav2 safety config — footprint affects collision/planning)
+**Must-fix**: 0 | **Suggestions**: 5 (1 fixed, 4 dispositioned)
+
+Covered the step-4 footprint re-tune + the previously-unreviewed step-2 cutover. Static
+analysis clean (yamllint, flake8). Both adversarial specialists ran (Claude + Copilot).
+Copilot's two "must-fix" (footprint not closed; winding CW→CCW) were **verified false
+positives** against Nav2 `FootprintCollisionChecker.footprintCost`: Nav2 closes the polygon
+itself (last→first edge) and computes max-cost over traced edges (winding-independent). Claude's
+"open ring, winding-independent" read was correct.
+
+### Findings
+- [x] (suggestion) stale `nav2_params.yaml` ref in comment — fixed → `nav2_params.base.yaml` — `navigation_launch.py:278`
+- [ ] (suggestion) `robot_radius 1.5` vestigial when footprint set — deferred to echo.yaml consolidation step — `nav2_params.240.yaml:18`
+- [ ] (suggestion) standalone-launch fallback uses rig-less base — pre-existing, documented intentional — `navigation_launch.py:95`
+- [ ] (suggestion, Copilot, won't-fix) footprint extent thresholds loose — by design (revert guard, not spec pin) — `test_param_compose.py`
+- [ ] (suggestion, Copilot) no schema validation in `deep_merge`/composed tree — step-1 mechanism, out of scope; footprint presence is tested — `param_compose.py`
+- [ ] (false positive, Copilot) footprint not closed / winding order — verified against Nav2 source; open rings correct, winding-independent — `nav2_params.240.yaml`

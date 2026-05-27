@@ -1,17 +1,22 @@
 # EchoBoat 240 hull-model overlay (#3).
 # Geometry + dynamics that differ by hull; merged over nav2_params.base.yaml at
-# launch (see nav2_bringup_launch.py). These are the values BizzyBoat (240) runs
-# today — keep byte-equivalent until a measured 240 re-tune (issue #3 step 4).
+# launch (see nav2_bringup_launch.py).
+# Footprint re-tuned to the real 240 hull (#3 step 4): ~1.95 m x 1.0 m bounding
+# box from bizzyboat.urdf.xacro side bumpers (1.80 m @ y=±0.47), stern AutoNav
+# box (x≈-0.99), under the fwd camera/rail overhang. Replaces the Izzy-inherited
+# 1.5 x 0.6 footprint. Behavior change → on-water validation. Dynamics knobs
+# (turning radius, rotational vel) were already corrected via #124 and match the
+# current-corrected specs in unh_echoboats_project11/docs/bizzyboat_performance.md.
 local_costmap:
   local_costmap:
     ros__parameters:
-      footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
+      footprint: "[[0.95, 0.5], [0.95, -0.5], [-1.0, -0.5], [-1.0, 0.5]]"
 
 global_costmap:
   global_costmap:
     ros__parameters:
       robot_radius: 1.5
-      footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
+      footprint: "[[0.95, 0.5], [0.95, -0.5], [-1.0, -0.5], [-1.0, 0.5]]"
 
 planner_server:
   ros__parameters:

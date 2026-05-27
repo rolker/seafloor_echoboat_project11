@@ -275,7 +275,7 @@ def generate_launch_description():
     # NOTE (#170): this composition path mirrors the non-composition routing —
     # controller/behaviors publish cmd_vel_nav and the Collision Monitor gates it
     # (cmd_vel_in_topic: cmd_vel_nav -> cmd_vel_out_topic:
-    # piloting_mode/autonomous/cmd_vel, both from nav2_params.yaml). velocity_smoother
+    # piloting_mode/autonomous/cmd_vel, both from nav2_params.base.yaml). velocity_smoother
     # is omitted here too (the cmd_vel filter chain is deliberately disconnected on
     # these boats; it is also absent from lifecycle_nodes above). This path stays
     # UNUSED in the field (use_composition=False), but is kept consistent so enabling

@@ -2,11 +2,13 @@
 
 Locks the composition invariants: the shared base carries no hull-model knobs,
 the per-model overlays supply them, and the merge reconstructs a complete param
-tree. The one-time check that merge(base, 240) == the pre-split nav2_params.yaml
-was verified at split time (git history preserves the original); these tests
-guard the structure going forward.
+tree. merge(base, 240) reproduced the pre-split nav2_params.yaml byte-for-byte at
+split time (git history preserves the original) — except the 240 footprint, which
+was subsequently re-tuned to the real hull (#3 step 4), so that equality no longer
+holds for the footprint alone. These tests guard the structure going forward.
 """
 
+import ast
 import os
 import sys
 
@@ -67,6 +69,14 @@ def test_base_omits_hull_knobs():
 
 # --- merged 240 carries today's values ---
 
+def _footprint_extent(footprint_str):
+    """Bounding-box (length_x, width_y) of a nav2 footprint polygon string."""
+    pts = ast.literal_eval(footprint_str)
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    return max(xs) - min(xs), max(ys) - min(ys)
+
+
 def test_merged_240_hull_values():
     p = merged_params(_CONFIG, '240')
     assert _gc(p)['robot_radius'] == 1.5
@@ -81,6 +91,19 @@ def test_merged_240_hull_values():
 
 
 # --- merged 160 is well-formed (placeholder values until step 3) ---
+
+def test_240_footprint_matches_real_hull():
+    """240 footprint was re-tuned to the real hull (#3 step 4): ~1.95 x 1.0 m
+    from bizzyboat.urdf.xacro. Guards against a silent revert to the inherited
+    Izzy 1.5 x 0.6 footprint (which would understate the deployed boat's size)."""
+    p = merged_params(_CONFIG, '240')
+    for footprint in (_lc(p)['footprint'], _gc(p)['footprint']):
+        length, width = _footprint_extent(footprint)
+        assert length >= 1.8, f'240 footprint too short ({length:.2f} m) — Izzy hull?'
+        assert width >= 0.9, f'240 footprint too narrow ({width:.2f} m) — Izzy hull?'
+    # local and global costmaps share one hull footprint
+    assert _lc(p)['footprint'] == _gc(p)['footprint']
+
 
 def test_merged_160_wellformed():
     p = merged_params(_CONFIG, '160')
