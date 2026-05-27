@@ -30,7 +30,6 @@ behavior_server:
       maximum_radius: 10.0
       maximum_speed: 1.0
       maximum_rotation_speed: 0.75
-      deceleration: -0.45
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
     rotational_acc_lim: 3.2
