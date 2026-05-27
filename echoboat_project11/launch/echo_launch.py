@@ -31,8 +31,9 @@ def generate_launch_description():
 
   is_simulator = LaunchConfiguration('is_simulator')
 
-  # Hull model selects the nav2 per-hull param overlay (#3). Default 240 matches
-  # nav2_bringup_launch.py's own default; Izzy passes model:=160 from its instance launch.
+  # Hull model selects the nav2 per-hull param overlay (#3); default 240 matches
+  # nav2_bringup_launch.py. An instance launch can pass model:=160 — Izzy's instance-launch
+  # wiring is a pending follow-up, so until then Izzy uses the 240 default.
   model = LaunchConfiguration('model')
 
   namespace_arg = DeclareLaunchArgument(
