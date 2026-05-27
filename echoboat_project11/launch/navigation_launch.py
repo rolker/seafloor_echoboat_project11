@@ -92,7 +92,10 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
+        # Normally overridden by nav2_bringup_launch.py, which passes the composed
+        # base+per-model params (#3). This fallback points at the shared base only
+        # (no hull-model overlay) for the rare standalone invocation.
+        default_value=os.path.join(bringup_dir, 'config', 'nav2_params.base.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes',
     )
 

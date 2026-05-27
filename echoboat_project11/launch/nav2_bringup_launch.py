@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import sys
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -21,7 +22,9 @@ from launch.actions import (
     DeclareLaunchArgument,
     GroupAction,
     IncludeLaunchDescription,
+    OpaqueFunction,
     SetEnvironmentVariable,
+    SetLaunchConfiguration,
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -30,6 +33,25 @@ from launch_ros.actions import Node
 from launch_ros.actions import PushROSNamespace
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import ReplaceString, RewrittenYaml
+
+# param_compose.py lives alongside this launch file; add this directory to the
+# path so the import resolves both from source and from the installed share/ dir.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from param_compose import compose_merged_params  # noqa: E402
+
+
+def _compose_params(context, *args, **kwargs):
+    """OpaqueFunction: point params_file at base + per-model overlay unless one was given.
+
+    An explicitly-passed ``params_file`` is used as-is (escape hatch); otherwise
+    compose nav2_params.base.yaml + nav2_params.<model>.yaml into a temp file.
+    """
+    params_file = LaunchConfiguration('params_file').perform(context)
+    if params_file:
+        return []
+    model = LaunchConfiguration('model').perform(context)
+    cfg_dir = os.path.join(get_package_share_directory('echoboat_project11'), 'config')
+    return [SetLaunchConfiguration('params_file', compose_merged_params(cfg_dir, model))]
 
 
 def generate_launch_description():
@@ -114,10 +136,20 @@ def generate_launch_description():
         description='Use simulation (Gazebo) clock if true',
     )
 
+    declare_model_cmd = DeclareLaunchArgument(
+        'model',
+        default_value='240',
+        choices=['160', '240'],
+        description='EchoBoat hull model: selects config/nav2_params.<model>.yaml '
+        '(merged over nav2_params.base.yaml). 240 = BizzyBoat, 160 = IzzyBoat.',
+    )
+
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'config', 'nav2_params.yaml'),
-        description='Full path to the ROS2 parameters file to use for all launched nodes',
+        default_value='',
+        description='Full path to a ROS2 parameters file. Empty (default) composes '
+        'nav2_params.base.yaml + the per-model overlay from `model`; set this to '
+        'override composition with an explicit file.',
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -186,12 +218,17 @@ def generate_launch_description():
     ld.add_action(declare_slam_cmd)
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_use_sim_time_cmd)
+    ld.add_action(declare_model_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
     ld.add_action(declare_use_localization_cmd)
+
+    # Compose base + per-model params into params_file (unless one was passed),
+    # before the bringup group resolves the ReplaceString/RewrittenYaml chain.
+    ld.add_action(OpaqueFunction(function=_compose_params))
 
     # Add the actions to launch all of the navigation nodes
     ld.add_action(bringup_cmd_group)

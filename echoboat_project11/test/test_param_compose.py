@@ -1,0 +1,94 @@
+"""Tests for the nav2 base + per-hull-model param composition (issue #3).
+
+Locks the composition invariants: the shared base carries no hull-model knobs,
+the per-model overlays supply them, and the merge reconstructs a complete param
+tree. The one-time check that merge(base, 240) == the pre-split nav2_params.yaml
+was verified at split time (git history preserves the original); these tests
+guard the structure going forward.
+"""
+
+import os
+import sys
+
+import pytest
+import yaml
+
+_PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_LAUNCH = os.path.join(_PKG, 'launch')
+_CONFIG = os.path.join(_PKG, 'config')
+sys.path.insert(0, _LAUNCH)
+
+from param_compose import deep_merge, merged_params  # noqa: E402
+
+
+def _lc(params):
+    return params['local_costmap']['local_costmap']['ros__parameters']
+
+
+def _gc(params):
+    return params['global_costmap']['global_costmap']['ros__parameters']
+
+
+# --- deep_merge semantics ---
+
+def test_deep_merge_recurses_dicts():
+    base = {'a': {'x': 1, 'y': 2}}
+    overlay = {'a': {'y': 20, 'z': 30}}
+    assert deep_merge(base, overlay) == {'a': {'x': 1, 'y': 20, 'z': 30}}
+
+
+def test_deep_merge_replaces_scalars_and_lists():
+    base = {'v': [1, 2, 3], 's': 'old'}
+    overlay = {'v': [9], 's': 'new'}
+    assert deep_merge(base, overlay) == {'v': [9], 's': 'new'}
+
+
+def test_deep_merge_does_not_mutate_inputs():
+    base = {'a': {'x': 1}}
+    overlay = {'a': {'y': 2}}
+    deep_merge(base, overlay)
+    assert base == {'a': {'x': 1}}
+
+
+# --- base carries no hull-model knobs ---
+
+def test_base_omits_hull_knobs():
+    with open(os.path.join(_CONFIG, 'nav2_params.base.yaml')) as f:
+        base = yaml.safe_load(f)
+    assert 'footprint' not in _lc(base)
+    assert 'footprint' not in _gc(base)
+    assert 'robot_radius' not in _gc(base)
+    bs = base['behavior_server']['ros__parameters']
+    assert 'max_rotational_vel' not in bs
+    assert 'minimum_radius' not in bs['hover']
+    assert 'max_velocity' not in base['velocity_smoother']['ros__parameters']
+    assert 'minimum_turning_radius' not in base['planner_server']['ros__parameters']['GridBased']
+
+
+# --- merged 240 carries today's values ---
+
+def test_merged_240_hull_values():
+    p = merged_params(_CONFIG, '240')
+    assert _gc(p)['robot_radius'] == 1.5
+    assert 'footprint' in _lc(p) and 'footprint' in _gc(p)
+    assert p['planner_server']['ros__parameters']['GridBased']['minimum_turning_radius'] == 1.5
+    assert p['velocity_smoother']['ros__parameters']['max_velocity'] == [2.75, 0.0, 0.45]
+    bs = p['behavior_server']['ros__parameters']
+    assert bs['max_rotational_vel'] == 1.0
+    assert bs['hover']['maximum_speed'] == 1.0
+    # shared base params survive the merge
+    assert p['controller_server']['ros__parameters']['controller_frequency'] == 5.0
+
+
+# --- merged 160 is well-formed (placeholder values until step 3) ---
+
+def test_merged_160_wellformed():
+    p = merged_params(_CONFIG, '160')
+    assert 'footprint' in _gc(p)
+    assert 'robot_radius' in _gc(p)
+    assert 'max_velocity' in p['velocity_smoother']['ros__parameters']
+
+
+def test_unknown_model_raises():
+    with pytest.raises(RuntimeError):
+        merged_params(_CONFIG, '999')
