@@ -112,6 +112,22 @@ def test_merged_160_wellformed():
     assert 'max_velocity' in p['velocity_smoother']['ros__parameters']
 
 
+def test_160_hull_values_distinct_from_240():
+    """Step 3: the 160 overlay carries real Izzy values (not the placeholder copy of
+    240). Izzy turns wider and spins faster than the 240 — lock those deltas so the
+    overlay can't silently regress to the 240's vectored-thrust values."""
+    p160 = merged_params(_CONFIG, '160')
+    p240 = merged_params(_CONFIG, '240')
+    # Izzy's planned turning radius is much larger than the 240's (skid-steer).
+    assert p160['planner_server']['ros__parameters']['GridBased']['minimum_turning_radius'] == 3.0
+    assert (p160['planner_server']['ros__parameters']['GridBased']['minimum_turning_radius']
+            > p240['planner_server']['ros__parameters']['GridBased']['minimum_turning_radius'])
+    # Izzy's max yaw rate (1.5 rad/s) exceeds the 240's vectored-thrust cap (1.0).
+    assert p160['behavior_server']['ros__parameters']['max_rotational_vel'] == 1.5
+    # 160 footprint is the Izzy hull, distinct from the 240 box.
+    assert _lc(p160)['footprint'] != _lc(p240)['footprint']
+
+
 def test_unknown_model_raises():
     with pytest.raises(RuntimeError):
         merged_params(_CONFIG, '999')

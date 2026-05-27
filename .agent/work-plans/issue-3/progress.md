@@ -169,6 +169,34 @@ itself (last→first edge) and computes max-cost over traced edges (winding-inde
 - [ ] (suggestion, Copilot) no schema validation in `deep_merge`/composed tree — step-1 mechanism, out of scope; footprint presence is tested — `param_compose.py`
 - [ ] (false positive, Copilot) footprint not closed / winding order — verified against Nav2 source; open rings correct, winding-independent — `nav2_params.240.yaml`
 
+## Implementation — Step 3: real 160 values + model plumbing (2026-05-27)
+
+**Branch**: feature/issue-3 (folded into PR #29, per Roland — #29 carries the whole #3 split).
+
+**`config/nav2_params.160.yaml`** — replaced the placeholder (was a copy of the 240 overlay)
+with real Izzy values:
+- footprint from `izzyboat.urdf` (hull 1.3×0.8 m + 45°-rotated pointed bow to x≈1.15) →
+  pointed-bow polygon `[[1.1,0],[0.7,0.45],[-0.6,0.45],[-0.6,-0.45],[0.7,-0.45]]` (~1.7×0.9 m).
+- dynamics from `izzyboat_project11/measurements.md`: `minimum_turning_radius 3.0` (Izzy turns
+  much wider than the 240's 1.5 — skid-steer, not vectored thrust), `max_rotational_vel 1.5`
+  (vs 240's 1.0), `rotational_acc_lim 1.2`, smoother `max_velocity [2.0,0,1.5]` / `max_accel
+  [0.6,0,1.2]` / `max_decel [-0.9,0,-1.2]`, hover `minimum_radius 3.0`.
+- **Field-estimate-grade** (measurements.md is informal foxglove-eyeball notes); Izzy is the
+  test boat, not the daily boat → review / on-water validate when Izzy next runs.
+
+**`launch/echo_launch.py`** — added a `model` arg (`choices=['160','240']`, default `240` to
+match `nav2_bringup_launch.py`) and forwards it into the nav2_bringup include. Generic launch,
+so it can't hardcode 160.
+
+**Tests**: added `test_160_hull_values_distinct_from_240` (locks turn radius 3.0 > 240's,
+max_rotational_vel 1.5, distinct footprint). 14 pass.
+
+**⬜ Cross-repo follow-up (NOT done — surfaced to Roland):** Izzy only *uses* the 160 overlay
+once `izzyboat_launch.py` (in `unh_echoboats_project11`) passes `model:='160'` to its
+`echo_launch.py` include — a one-line change. It's a different repo (can't fold into #29) and
+Izzy isn't the next-deployment boat, so it's flagged for a decision rather than spawned as a
+new issue/PR. Until then Izzy gets the default (240) overlay.
+
 ## Review Triage — Copilot PR #29 backlog (autonomous, 2026-05-27)
 
 Triaged the unresolved Copilot threads carried from the earlier PR #29 rounds. Two were

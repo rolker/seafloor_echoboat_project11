@@ -31,8 +31,16 @@ def generate_launch_description():
 
   is_simulator = LaunchConfiguration('is_simulator')
 
+  # Hull model selects the nav2 per-hull param overlay (#3). Default 240 matches
+  # nav2_bringup_launch.py's own default; Izzy passes model:=160 from its instance launch.
+  model = LaunchConfiguration('model')
+
   namespace_arg = DeclareLaunchArgument(
     "namespace", default_value=TextSubstitution(text="echo")
+  )
+
+  model_arg = DeclareLaunchArgument(
+    "model", default_value=TextSubstitution(text="240"), choices=["160", "240"]
   )
 
   enable_bridge_arg = DeclareLaunchArgument(
@@ -58,6 +66,7 @@ def generate_launch_description():
     fcu_url_arg,
     gcs_url_arg,
     is_simulator_arg,
+    model_arg,
     GroupAction(
       actions=[
         PushROSNamespace(namespace),
@@ -208,6 +217,7 @@ def generate_launch_description():
         'namespace': namespace,
         'use_namespace': 'true',
         'use_composition': 'False',
+        'model': model,
       }.items()
     )
 
