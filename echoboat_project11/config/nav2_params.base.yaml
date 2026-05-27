@@ -95,18 +95,9 @@ local_costmap:
       width: 400
       height: 400
       resolution: 0.25
-      footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
-      # Required build dependency: the `sea_surface_layer::SeaSurfaceLayer`
-      # plugin lives in the `sea_surface_segmentation` package (sensors_ws
-      # layer). Deployments using this config must have sensors_ws built —
-      # otherwise pluginlib will fail to load the layer and the local_costmap
-      # bringup will fail hard.
-      plugins: ["chart_layer",
-                "sea_surface_layer_forward",
-                "sea_surface_layer_port",
-                "sea_surface_layer_starboard",
-                "sea_surface_layer_aft",
-                "inflation_layer"]
+      # Sensor-rig layers (e.g. sea_surface segmentation) are added per-boat via
+      # the instance overlay (instance_params); base is rig-agnostic (#3 step 2).
+      plugins: ["chart_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 0.05
@@ -121,34 +112,6 @@ local_costmap:
         s57_grids_namespace: <robot_namespace>/s57
         chart_datum_frame: <tf_prefix>/chart_datum
         sea_surface_frame: <tf_prefix>/map_tide
-      # Four sea_surface_layer instances, one per OAK direction. Bizzy
-      # publishes on oak_forward/port/starboard/aft; boats without a
-      # given camera produce no segmentation traffic and the matching
-      # layer stays at NO_INFORMATION (silent no-op).
-      sea_surface_layer_forward:
-        plugin: "sea_surface_layer::SeaSurfaceLayer"
-        enabled: True
-        segmentation_topic: <robot_namespace>/sensors/cameras/oak_forward/segmentation
-        camera_info_topic: <robot_namespace>/sensors/cameras/oak_forward/segmentation/camera_info
-        maximum_range: 150.0
-      sea_surface_layer_port:
-        plugin: "sea_surface_layer::SeaSurfaceLayer"
-        enabled: True
-        segmentation_topic: <robot_namespace>/sensors/cameras/oak_port/segmentation
-        camera_info_topic: <robot_namespace>/sensors/cameras/oak_port/segmentation/camera_info
-        maximum_range: 150.0
-      sea_surface_layer_starboard:
-        plugin: "sea_surface_layer::SeaSurfaceLayer"
-        enabled: True
-        segmentation_topic: <robot_namespace>/sensors/cameras/oak_starboard/segmentation
-        camera_info_topic: <robot_namespace>/sensors/cameras/oak_starboard/segmentation/camera_info
-        maximum_range: 150.0
-      sea_surface_layer_aft:
-        plugin: "sea_surface_layer::SeaSurfaceLayer"
-        enabled: True
-        segmentation_topic: <robot_namespace>/sensors/cameras/oak_aft/segmentation
-        camera_info_topic: <robot_namespace>/sensors/cameras/oak_aft/segmentation/camera_info
-        maximum_range: 150.0
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -175,8 +138,6 @@ global_costmap:
       publish_frequency: 0.5
       global_frame: <tf_prefix>/map_tide
       robot_base_frame: <tf_prefix>/base_link
-      robot_radius: 1.5
-      footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
       resolution: 1.0
       track_unknown_space: true
       rolling_window: true
@@ -242,7 +203,6 @@ planner_server:
       allow_unknown: true
       change_penalty: 0.5
       cost_penalty: 10.0
-      minimum_turning_radius: 1.5  # was 3.0; boats turn far tighter (rolker/unh_echoboats_project11#124 §2)
       debug_visualizations: false
       max_iterations: -1
       max_on_approach_iterations: -1
@@ -283,10 +243,6 @@ behavior_server:
       plugin: "nav2_behaviors::AssistedTeleop"
     hover:
       plugin: "marine_nav_behaviors::Hover"
-      minimum_radius: 2.5
-      maximum_radius: 10.0
-      maximum_speed: 1.0
-      maximum_rotation_speed: 0.75
       generate_visualization: true
 
     local_frame: <tf_prefix>/odom
@@ -294,9 +250,6 @@ behavior_server:
     robot_base_frame: <tf_prefix>/base_link
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
-    max_rotational_vel: 1.0
-    min_rotational_vel: 0.4
-    rotational_acc_lim: 3.2
     enable_stamped_cmd_vel: true
 
 waypoint_follower:
@@ -315,10 +268,6 @@ velocity_smoother:
     smoothing_frequency: 10.0
     scale_velocities: true
     feedback: "OPEN_LOOP"
-    max_velocity: [2.75, 0.0, 0.45]
-    min_velocity: [-0.5, 0.0, -0.45]
-    max_accel: [0.8, 0.0, 0.2]
-    max_decel: [-0.45, 0.0, -0.2]
     odom_topic: <robot_namespace>/odom
     odom_duration: 0.5
     deadband_velocity: [0.0, 0.0, 0.0]
@@ -337,43 +286,12 @@ collision_monitor:
     source_timeout: 1.0
     base_shift_correction: True
     stop_pub_timeout: 2.0
-    # Polygons represent zone around the robot for "stop", "slowdown" and "limit" action types,
-    # and robot footprint for "approach" action type.
-    # Forward-arc zones (single forward camera), base_link x-fwd / y-port.
-    # Tuned for boat momentum: passive coast-down ~10-15 m from ~1.5 m/s
-    # cruise (#124 §2 / PR #172), so slowdown stands off well beyond stopping
-    # distance to bleed speed early; stop is last-resort. CM has no reverse
-    # action. Starting geometry — refine in sim + Phase C trigger catalog (#169).
-    polygons: ["CollisionSlowdown", "CollisionStop"]
-    CollisionSlowdown:
-      type: "polygon"
-      points: "[[20.0, 3.0], [20.0, -3.0], [0.0, -3.0], [0.0, 3.0]]"
-      action_type: "slowdown"
-      slowdown_ratio: 0.3
-      min_points: 4
-      visualize: True
-      polygon_pub_topic: "collision_monitor/slowdown_polygon"
-      enabled: True
-    CollisionStop:
-      type: "polygon"
-      points: "[[5.0, 2.0], [5.0, -2.0], [0.0, -2.0], [0.0, 2.0]]"
-      action_type: "stop"
-      min_points: 5
-      visualize: True
-      polygon_pub_topic: "collision_monitor/stop_polygon"
-      enabled: True
-    observation_sources: ["reflex_cloud"]
-    # Reflex PointCloud2 from the forward-OAK segmentation adapter
-    # (perception#17), on the canonical per-boat topic (bizzy:
-    # unh_echoboats_project11#178). Sparse (~tens of pts). Height bracket
-    # spans the projected plane (z~=0 in base_link_level) plus the pitch-
-    # induced z-shift of far points once transformed into base_link.
-    reflex_cloud:
-      type: "pointcloud"
-      topic: "collision_monitor/pointcloud"
-      min_height: -2.0
-      max_height: 2.0
-      enabled: True
+    # Reflex zones + observation sources are supplied per-boat via the instance
+    # overlay (instance_params) — they depend on the boat's sensor rig (#3 step 2).
+    # With neither (a boat without the reflex feed), the monitor is a pass-through:
+    # cmd_vel_nav → piloting_mode/autonomous/cmd_vel unchanged.
+    polygons: []
+    observation_sources: []
 
 docking_server:
   ros__parameters:

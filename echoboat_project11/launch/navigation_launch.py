@@ -92,7 +92,10 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
+        # Normally overridden by nav2_bringup_launch.py, which passes the composed
+        # base+per-model params (#3). This fallback points at the shared base only
+        # (no hull-model overlay) for the rare standalone invocation.
+        default_value=os.path.join(bringup_dir, 'config', 'nav2_params.base.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes',
     )
 
@@ -272,7 +275,7 @@ def generate_launch_description():
     # NOTE (#170): this composition path mirrors the non-composition routing —
     # controller/behaviors publish cmd_vel_nav and the Collision Monitor gates it
     # (cmd_vel_in_topic: cmd_vel_nav -> cmd_vel_out_topic:
-    # piloting_mode/autonomous/cmd_vel, both from nav2_params.yaml). velocity_smoother
+    # piloting_mode/autonomous/cmd_vel, both from nav2_params.base.yaml). velocity_smoother
     # is omitted here too (the cmd_vel filter chain is deliberately disconnected on
     # these boats; it is also absent from lifecycle_nodes above). This path stays
     # UNUSED in the field (use_composition=False), but is kept consistent so enabling

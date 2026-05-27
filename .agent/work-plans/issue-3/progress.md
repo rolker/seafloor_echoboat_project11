@@ -1,0 +1,254 @@
+---
+issue: 3
+---
+
+# Issue #3 — Add support for Echoboat 240
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-05-26 18:37 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+
+**Plan**: `.agent/work-plans/issue-3/plan.md` at `4c32efa`
+**PR**: https://github.com/rolker/seafloor_echoboat_project11/pull/29 (`[PLAN]` prefix)
+**Phases**: 3 (seafloor split + model arg; instance includes pass model; optional 240 re-tuning follow-ups)
+
+### Open questions
+- [ ] Cross-repo sequencing: instance-launch changes land in `unh_echoboats_project11` — separate PR sequenced after this one (back-compat `240` default keeps instances working meanwhile)?
+- [ ] Which never-revisited knobs (`robot_radius`, footprint, velocity limits) are genuinely wrong for the 240 and worth a re-tuning follow-up vs genuinely shared — decide after the Phase 0 delta table exists.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-05-26 18:46 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context)) (in-context — author self-review)
+
+**Plan**: `.agent/work-plans/issue-3/plan.md` at `f536179`
+**PR**: https://github.com/rolker/seafloor_echoboat_project11/pull/29
+**Verdict**: approve-with-suggestions
+
+### Findings
+- [ ] (suggestion) Model hook is `nav2_bringup_launch.py:118-119` (`config/nav2_params.yaml`); `navigation_launch.py`'s `params/nav2_params.yaml` default is vestigial — drop/clarify it in the plan's file list — `plan.md` Files table
+- [ ] (suggestion) Consider splitting PR1 into structure+model-arg (regression-safe) vs duplicate-knob consolidation — `plan.md` Approach step 5 / Estimated Scope
+- [ ] (suggestion) `sim_echo.yaml` is empty — note its disposition in the Phase 0 delta table — `plan.md` Approach step 1
+- Confirmed independently: nav2_bringup wraps a single `source_file` in `ReplaceString`+`ParameterFile`, so the Phase 0 overlay spike is genuinely necessary (not a gap — validates the plan).
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-05-26 20:47 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+**Verdict**: approved
+
+**Branch**: feature/issue-3 at `27d3de9`
+**Mode**: pre-push
+**Depth**: Standard (reason: deployed boat's autonomous nav2 launch/params)
+**Must-fix**: 0 | **Suggestions**: 3 (all addressed)
+
+Step 1 implemented: model-based param composition + nav2_params base/160/240 split.
+Adversarial wiring verified correct (Claude: lazy substitution resolution vs OpaqueFunction
+ordering is sound; composed temp file reaches both composition + non-composition node paths).
+Behavior preservation verified: merge(base,240) semantically identical to the pre-split
+nav2_params.yaml (279 leaf params, zero diffs). Copilot's "byte-equivalence" High = false
+positive (nav2 needs semantic, not byte, equivalence). Field watch-item resolved: gitcloud/jazzy
+== origin/jazzy (c804dfa), no unmerged nav2_params.yaml edits to lose.
+
+### Findings
+- [x] (suggestion, cross-confirmed) tempfile NamedTemporaryFile(delete=False) leak — added atexit cleanup — `param_compose.py`
+- [x] (suggestion, cross-confirmed) `navigation_launch.py` params_file default pointed at nonexistent `params/nav2_params.yaml` — repointed to `config/nav2_params.base.yaml` + clarifying comment — `navigation_launch.py:95`
+- [x] (suggestion) `model` arg lacked validation — added `choices=['160','240']` — `nav2_bringup_launch.py`
+- [ ] (carry-forward) field-reconciliation flow: when deleting generic config that field hosts also edit, confirm gitcloud is merged first (done here)
+
+## Implementation Status (resume — 2026-05-26 21:44 -04:00)
+
+> Not a review entry; a resume snapshot (per user request to persist state).
+
+**Done — steps 1, 2a, 2** (all on `feature/issue-3` @ `11065bd`, PR #29; + cross-repo PR #185):
+
+- **Mechanism (Phase 0 decision):** layered deep-merge composition, not full file copies.
+  `nav2_params.base.yaml` (shared) ← `nav2_params.<model>.yaml` (hull) ← optional
+  per-instance overlay (`instance_params`). Merge in `launch/param_compose.py`
+  (pure, unit-tested); `nav2_bringup_launch.py` `model:=160|240` (default 240) +
+  `instance_params` args drive an OpaqueFunction that composes → temp file → existing
+  `ReplaceString`/`RewrittenYaml` chain. Wiring verified correct (lazy substitution vs
+  OpaqueFunction ordering). 11 pytest cases (`test/test_param_compose.py`).
+- **Step 1:** split `nav2_params.yaml` → base + 160 + 240. 240 ≡ today (verified). 160 is
+  a placeholder copy of 240 (real values = step 3). Instances inherit `model=240` default.
+- **Step 2a:** added the optional `instance_params` 3rd layer (back-compat).
+- **Step 2 (cutover, atomic cross-repo):** base made rig-agnostic — sea_surface rig +
+  collision reflex response removed (gating wiring kept). BizzyBoat re-adds them via
+  `unh_echoboats_project11/bizzyboat_project11/config/nav2_overlay.yaml`; its
+  `nav_launch.py` passes `model:=240` + `instance_params:=<overlay>`.
+  → `unh_echoboats_project11#184`, branch `feature/issue-184` @ `2a04fad`, PR #185 (draft).
+  **Verified:** `base + 240 + overlay` == today's `nav2_params.yaml` (zero param diffs).
+
+**⚠ DEPLOY-TOGETHER:** PR #29 (seafloor base-reduction) and PR #185 (Bizzy overlay) must
+merge **and reach gabby together**, else BizzyBoat loses its rig/reflex in the gap.
+
+**Field entry points (verified):** Bizzy nav2 = `bizzyboat_project11/nav_launch.py` only
+(`core_launch.py` references echoboat's mavros.yaml, not nav2). Izzy nav2 = via
+`echo_launch.py` (gets no-rig base; `model` defaults to 240 but hull params are
+placeholder-equal until step 3 — threading `model=160` to izzy is a step-3 item).
+
+**Remaining:**
+- [ ] `/review-code` on PR #29 **and** PR #185 (not yet run for the step-2 cutover; it
+      relocates safety config — recommended before ready).
+- [ ] Runtime smoke test (live `ros2 launch`, needs built nav2 stack): confirm Bizzy gets
+      4 sea_surface layers + reflex polygons + intact gating; confirm Izzy's
+      `collision_monitor` launches cleanly with empty `polygons`/`observation_sources`
+      (pass-through) — **unverified at runtime**.
+- [ ] **Step 3:** real 160 values into `nav2_params.160.yaml` from
+      `izzyboat_project11/measurements.md` (turn radius 3–4 m, top ~2 m/s, accel ~0.6,
+      rot ~1.5 rad/s, smaller footprint) + thread `model=160` to izzy via `echo_launch.py`.
+- [x] **Step 4:** 240 footprint re-tuned (see Implementation entry below). Dynamics knobs
+      needed no change (already correct via #124). **On-water validation still pending.**
+- [ ] `echo.yaml` model-specific bits (platform dims, helm max_speed/yaw, navigator block,
+      path_follower pid) + consolidate the duplicated hull-dim/turn-radius/pid homes (deferred).
+
+**Open questions:** cross-repo sequencing (resolved: coordinated pair); 240-retune timing
+(step 4, pre- vs post-freeze).
+
+**Active worktrees (not removed):** `issue-seafloor_echoboat_project11-3`,
+`issue-unh_echoboats_project11-184`.
+
+## Implementation — Step 4: 240 footprint re-tune (2026-05-27)
+
+**Branch**: feature/issue-3 (folded into PR #29 — user's call; #29 is therefore no longer
+"240 ≡ today", and the structural split + this behavior change now ship together).
+
+**What changed** (`config/nav2_params.240.yaml`):
+- `footprint` (local + global costmap): Izzy-inherited `[[1.0,0],[0.0,0.3],[-0.5,0.3],
+  [-0.5,-0.3],[0.0,-0.3],[1.0,0]]` (1.5 × 0.6 m) → `[[0.95,0.5],[0.95,-0.5],[-1.0,-0.5],
+  [-1.0,0.5]]` (~1.95 × 1.0 m bounding box of the real 240 hull).
+
+**Why this is the whole re-tune** (cross-checked vs current-corrected
+`unh_echoboats_project11/docs/bizzyboat_performance.md`, #124 §2, 7 deployments, + URDF):
+- The footprint was the only genuinely Izzy-inherited, hull-wrong value. Source:
+  `bizzyboat.urdf.xacro` — side bumpers 1.80 m @ y=±0.47 (~0.94 m beam), stern AutoNav box
+  x≈−0.99, fwd camera/rail overhang x≈+1.05 (up high; box sits under it with margin).
+  Roland chose the hull-box-+-margin option (vs include-overhang / tapered hexagon).
+- **Already correct, untouched**: `minimum_turning_radius 1.5` (matches measured ~1.5 m @
+  cruise), `behavior_server.max_rotational_vel 1.0` (matches ~0.9 rad/s peak pivot + raised
+  helm cap), `FollowPath.default_speed 1.5` in base (matches cruise 1.52 m/s). These were
+  the #124 *general* corrections, not Izzy inheritance.
+- **Vestigial**: `global_costmap.robot_radius 1.5` — ignored when a footprint polygon is set;
+  left as-is, flagged for the echo.yaml consolidation step.
+- **Deliberately not re-tuned**: `velocity_smoother` — the performance doc states it is
+  disconnected on Bizzy and re-tuning is deferred ("no action unless needed"). Out of scope.
+
+**Tests**: `test/test_param_compose.py` — added `test_240_footprint_matches_real_hull`
+(asserts ≥1.8 m × ≥0.9 m extent on both costmaps + local==global; catches a silent revert to
+the Izzy 1.5 × 0.6 footprint). Docstring updated (240 no longer byte-equals pre-split for the
+footprint). 12 passed.
+
+**⚠ Behavior change → on-water validation pending**: a bigger footprint widens planned berths
+and may reject tighter passages. Not yet runtime-tested. Recommended before PR #29 merges /
+reaches the daily boat.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-05-27 11:36 -04:00
+**By**: Claude Code Agent (Claude Opus 4.7 (1M context))
+**Verdict**: approved
+
+**Branch**: feature/issue-3 at `4a35052` + working tree (step-4 footprint re-tune)
+**Mode**: pre-push
+**Depth**: Standard (reason: deployed boat's autonomous nav2 safety config — footprint affects collision/planning)
+**Must-fix**: 0 | **Suggestions**: 5 (1 fixed, 4 dispositioned)
+
+Covered the step-4 footprint re-tune + the previously-unreviewed step-2 cutover. Static
+analysis clean (yamllint, flake8). Both adversarial specialists ran (Claude + Copilot).
+Copilot's two "must-fix" (footprint not closed; winding CW→CCW) were **verified false
+positives** against Nav2 `FootprintCollisionChecker.footprintCost`: Nav2 closes the polygon
+itself (last→first edge) and computes max-cost over traced edges (winding-independent). Claude's
+"open ring, winding-independent" read was correct.
+
+### Findings
+- [x] (suggestion) stale `nav2_params.yaml` ref in comment — fixed → `nav2_params.base.yaml` — `navigation_launch.py:278`
+- [ ] (suggestion) `robot_radius 1.5` vestigial when footprint set — deferred to echo.yaml consolidation step — `nav2_params.240.yaml:18`
+- [ ] (suggestion) standalone-launch fallback uses rig-less base — pre-existing, documented intentional — `navigation_launch.py:95`
+- [ ] (suggestion, Copilot, won't-fix) footprint extent thresholds loose — by design (revert guard, not spec pin) — `test_param_compose.py`
+- [ ] (suggestion, Copilot) no schema validation in `deep_merge`/composed tree — step-1 mechanism, out of scope; footprint presence is tested — `param_compose.py`
+- [ ] (false positive, Copilot) footprint not closed / winding order — verified against Nav2 source; open rings correct, winding-independent — `nav2_params.240.yaml`
+
+## Implementation — Step 3: real 160 values + model plumbing (2026-05-27)
+
+**Branch**: feature/issue-3 (folded into PR #29, per Roland — #29 carries the whole #3 split).
+
+**`config/nav2_params.160.yaml`** — replaced the placeholder (was a copy of the 240 overlay)
+with real Izzy values:
+- footprint from `izzyboat.urdf` (hull 1.3×0.8 m + 45°-rotated pointed bow to x≈1.15) →
+  pointed-bow polygon `[[1.1,0],[0.7,0.45],[-0.6,0.45],[-0.6,-0.45],[0.7,-0.45]]` (~1.7×0.9 m).
+- dynamics from `izzyboat_project11/measurements.md`: `minimum_turning_radius 3.0` (Izzy turns
+  much wider than the 240's 1.5 — skid-steer, not vectored thrust), `max_rotational_vel 1.5`
+  (vs 240's 1.0), `rotational_acc_lim 1.2`, smoother `max_velocity [2.0,0,1.5]` / `max_accel
+  [0.6,0,1.2]` / `max_decel [-0.9,0,-1.2]`, hover `minimum_radius 3.0`.
+- **Field-estimate-grade** (measurements.md is informal foxglove-eyeball notes); Izzy is the
+  test boat, not the daily boat → review / on-water validate when Izzy next runs.
+
+**`launch/echo_launch.py`** — added a `model` arg (`choices=['160','240']`, default `240` to
+match `nav2_bringup_launch.py`) and forwards it into the nav2_bringup include. Generic launch,
+so it can't hardcode 160.
+
+**Tests**: added `test_160_hull_values_distinct_from_240` (locks turn radius 3.0 > 240's,
+max_rotational_vel 1.5, distinct footprint). 14 pass.
+
+**⬜ Cross-repo follow-up (NOT done — surfaced to Roland):** Izzy only *uses* the 160 overlay
+once `izzyboat_launch.py` (in `unh_echoboats_project11`) passes `model:='160'` to its
+`echo_launch.py` include — a one-line change. It's a different repo (can't fold into #29) and
+Izzy isn't the next-deployment boat, so it's flagged for a decision rather than spawned as a
+new issue/PR. Until then Izzy gets the default (240) overlay.
+
+## Implementation — echo.yaml dead-navigator-block removal (2026-05-27)
+
+**Branch**: feature/issue-3 (PR #29). Decision (Roland): "just delete the dead block" — do
+*not* do the full echo.yaml base/hull split yet.
+
+**Finding that drove it** — verified where `echo.yaml`'s `/**/navigator:` block is actually
+consumed (Roland asked to double-check old-vs-current navigator):
+- It targets a node named `navigator` = the pre-BT **`marine_navigation`** standalone planner.
+  Its launch include in `marine_autonomy/launch/robot_core_launch.py` is **commented out**, and
+  the `marine_navigation` package **is no longer in the workspace** (only `unh_marine_navigation`'s
+  `marine_nav_*` packages exist).
+- The live navigator is **`bt_task_navigator`** (`marine_nav_bt_task_navigator`, runs
+  `run_tasks.xml`). Different node name → the `/**/navigator` params never attach to it.
+- `turn_radius` has **no consumer anywhere** in the workspace; `survey_lead_in_distance` likewise
+  (the live `lead_in_distance` in `manda_coverage/SurveyPath.cpp` is a different key/node).
+- So the plan's "3 inconsistent *live* hull/turn-radius copies" was partly wrong: the `echo.yaml`
+  `navigator.robot` copy is a **corpse**, not live drift. No reconcile + on-water validation needed.
+
+**Change**: deleted the entire `/**/navigator:` block (`echo.yaml`) — behavior-neutral (no
+consumer). Left a 2-line breadcrumb comment. The live `echo.yaml` blocks (`platform_sender`,
+`mru_transform`, `helm_manager`, `mavros`, `udp_bridge`) are untouched.
+
+**Deferred** (not this PR): the base/hull split of the live model-specific `echo.yaml` bits
+(`platform_sender` dims, `helm_manager` max_speed/yaw, `mavros` component_id). #3 stays partially
+open for that + the Izzy `model:=160` launch thread.
+
+## Review Triage — Copilot PR #29 backlog (autonomous, 2026-05-27)
+
+Triaged the unresolved Copilot threads carried from the earlier PR #29 rounds. Two were
+genuine robustness bugs in the composition mechanism and are now fixed (this commit); the rest
+are nits / already-dispositioned / verified false.
+
+### Findings
+- [x] (must-fix, Copilot) `python3-yaml` only a `<test_depend>` but imported at launch by
+      `param_compose.py` — added `<exec_depend>python3-yaml</exec_depend>` — `package.xml`
+- [x] (must-fix, Copilot) `merged_params()` crashes on an empty/comment-only layer
+      (`yaml.safe_load`→None→`deep_merge(...,None)`) — guard with `... or {}` at all three
+      load sites; added `test_empty_instance_overlay_is_noop` (13 pass) — `param_compose.py:47-54`
+- [ ] (nit, Copilot) `approve-with-suggestions` / heading vocabulary vs ADR-0013 in older
+      plan-review entries — cosmetic, left for the user/triage-reviews — `progress.md:20,27`
+- [ ] (stale, Copilot) "`Closes #3` on a plan-only PR" — no longer applies; PR now carries the
+      full implementation — `plan.md:6`
+- [ ] (dispositioned, Copilot ×2) `navigation_launch.py` base fallback omits hull params —
+      pre-existing, documented intentional for the rare standalone invocation — `navigation_launch.py:95-99`
+
+### Round 2 (Copilot auto-review after the step-3 / echo.yaml pushes)
+- [x] (suggestion, Copilot) `merged_params()` non-mapping layer → low-signal `AttributeError` —
+      added `_load_layer()` (None → {} no-op; non-dict → clear RuntimeError naming the file) +
+      `test_non_mapping_overlay_raises_clear_error`. 15 pass — `param_compose.py`
+- [x] (stale) `Closes #3` thread — resolved: PR body now says "Part of #3", does not auto-close.
+- [ ] (dispositioned, recurring) `navigation_launch.py` standalone fallback omits hull params —
+      documented intentional (always overridden by `nav2_bringup_launch.py`); surfaced to Roland
+      as a separate small task if standalone launch should be fully supported — `navigation_launch.py:95-99`
+- [ ] (nit, won't-fix-now) ADR-0013 verdict vocabulary in older plan-review entries — cosmetic
+      historical entries; left for the user — `progress.md:20,27`

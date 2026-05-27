@@ -53,49 +53,8 @@
       mav_frame: "BODY_NED"
 
 
-/**/navigator:
-  ros__parameters:
-
-    survey_lead_in_distance: 3.5
-    robot:
-      turn_radius: 4.0
-
-      max_velocity:
-        linear.x: 2.0
-        angular.z: 1.5
-
-      default_velocity:
-        linear.x: 1.5
-
-      max_acceleration:
-        linear.x: 0.75
-        angular.z: 0.8
-
-      default_acceleration:
-        linear.x: 0.7
-        angular.z: .3
-
-      default_deceleration:
-        linear.x: -0.35
-        angular.z: -0.3
-
-      max_deceleration:
-        linear.x: -0.7
-        angular.z: -0.8
-
-      footprint: "[[1.0, 0], [0.0, 0.3], [-0.5, 0.3], [-0.5, -0.3], [0.0, -0.3], [1.0, 0]]"
-      radius: 2.5
-
-    costmap:
-      global_frame: echo/map
-      robot_base_frame: echo/base_link
-      transform_tolerance: 1.0
-
-    path_follower:
-      pid:
-        Kp: 20.0
-        Ki: 0.5
-        Kd: 0.6
+# (Removed the dead /**/navigator: block — pre-BT marine_navigation node, no longer
+# launched; live navigator is bt_task_navigator. See #3 / commit msg.)
 
 # /**/s57_grids:
 #   ros__parameters:
