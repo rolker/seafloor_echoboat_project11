@@ -50,8 +50,10 @@ def _compose_params(context, *args, **kwargs):
     if params_file:
         return []
     model = LaunchConfiguration('model').perform(context)
+    instance_params = LaunchConfiguration('instance_params').perform(context)
     cfg_dir = os.path.join(get_package_share_directory('echoboat_project11'), 'config')
-    return [SetLaunchConfiguration('params_file', compose_merged_params(cfg_dir, model))]
+    composed = compose_merged_params(cfg_dir, model, instance_params or None)
+    return [SetLaunchConfiguration('params_file', composed)]
 
 
 def generate_launch_description():
@@ -144,12 +146,20 @@ def generate_launch_description():
         '(merged over nav2_params.base.yaml). 240 = BizzyBoat, 160 = IzzyBoat.',
     )
 
+    declare_instance_params_cmd = DeclareLaunchArgument(
+        'instance_params',
+        default_value='',
+        description='Optional path to a per-instance nav2 params overlay (e.g. a boat '
+        'instance package supplying its sensor rig / reflex config), merged on top of '
+        'base + the per-model overlay. Empty = no instance overlay.',
+    )
+
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
         default_value='',
         description='Full path to a ROS2 parameters file. Empty (default) composes '
-        'nav2_params.base.yaml + the per-model overlay from `model`; set this to '
-        'override composition with an explicit file.',
+        'nav2_params.base.yaml + the per-model overlay from `model` + the optional '
+        '`instance_params` overlay; set this to override composition with an explicit file.',
     )
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -219,6 +229,7 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_model_cmd)
+    ld.add_action(declare_instance_params_cmd)
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)

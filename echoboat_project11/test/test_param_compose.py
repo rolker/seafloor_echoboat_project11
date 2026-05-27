@@ -92,3 +92,29 @@ def test_merged_160_wellformed():
 def test_unknown_model_raises():
     with pytest.raises(RuntimeError):
         merged_params(_CONFIG, '999')
+
+
+# --- optional instance overlay (third layer) ---
+
+def test_instance_overlay_overrides_model(tmp_path):
+    overlay = tmp_path / 'instance.yaml'
+    overlay.write_text(
+        'global_costmap:\n'
+        '  global_costmap:\n'
+        '    ros__parameters:\n'
+        '      robot_radius: 9.9\n'
+    )
+    p = merged_params(_CONFIG, '240', str(overlay))
+    # instance layer wins over the model overlay's robot_radius
+    assert _gc(p)['robot_radius'] == 9.9
+    # untouched model/base values survive
+    assert p['controller_server']['ros__parameters']['controller_frequency'] == 5.0
+
+
+def test_no_instance_overlay_matches_two_layer():
+    assert merged_params(_CONFIG, '240', None) == merged_params(_CONFIG, '240')
+
+
+def test_missing_instance_overlay_raises():
+    with pytest.raises(RuntimeError):
+        merged_params(_CONFIG, '240', '/nonexistent/instance.yaml')

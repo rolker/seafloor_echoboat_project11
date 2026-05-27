@@ -27,8 +27,16 @@ def deep_merge(base, overlay):
     return out
 
 
-def merged_params(cfg_dir, model):
-    """Return the merged base + ``nav2_params.<model>.yaml`` param tree (a dict)."""
+def merged_params(cfg_dir, model, instance_params=None):
+    """Return the merged param tree: base, then the per-model overlay, then an
+    optional per-instance overlay (each later layer wins).
+
+    Layering order (lowest → highest precedence):
+      nav2_params.base.yaml  →  nav2_params.<model>.yaml  →  instance_params
+
+    ``instance_params`` is an absolute path (e.g. a boat-instance package's
+    overlay) or falsy to skip the third layer.
+    """
     overlay_path = os.path.join(cfg_dir, f'nav2_params.{model}.yaml')
     if not os.path.exists(overlay_path):
         raise RuntimeError(
@@ -38,12 +46,18 @@ def merged_params(cfg_dir, model):
     with open(os.path.join(cfg_dir, 'nav2_params.base.yaml')) as f:
         merged = yaml.safe_load(f)
     with open(overlay_path) as f:
-        return deep_merge(merged, yaml.safe_load(f))
+        merged = deep_merge(merged, yaml.safe_load(f))
+    if instance_params:
+        if not os.path.exists(instance_params):
+            raise RuntimeError(f"instance_params file not found: {instance_params}")
+        with open(instance_params) as f:
+            merged = deep_merge(merged, yaml.safe_load(f))
+    return merged
 
 
-def compose_merged_params(cfg_dir, model):
-    """Merge base + per-model overlay and write to a temp file; return its path."""
-    merged = merged_params(cfg_dir, model)
+def compose_merged_params(cfg_dir, model, instance_params=None):
+    """Merge base + per-model (+ optional instance) overlays to a temp file path."""
+    merged = merged_params(cfg_dir, model, instance_params)
     tmp = tempfile.NamedTemporaryFile(
         mode='w', prefix=f'nav2_params_{model}_', suffix='.yaml', delete=False
     )
