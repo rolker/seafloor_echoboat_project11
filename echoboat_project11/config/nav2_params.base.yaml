@@ -152,7 +152,7 @@ global_costmap:
       sea_surface_relay:
         plugin: "sea_surface_layer::SeaSurfaceRelayLayer"
         enabled: True
-        topic: sea_surface/lethal_grid
+        topic: <robot_namespace>/sea_surface/lethal_grid
       chart_layer:
         plugin: "s57_layer::S57Layer"
         enabled: True
