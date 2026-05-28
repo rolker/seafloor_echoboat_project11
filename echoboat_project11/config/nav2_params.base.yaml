@@ -144,7 +144,15 @@ global_costmap:
       width: 4000
       height: 4000
       # plugins: ["chart_layer", "obstacle_layer", "inflation_layer"]
-      plugins: ["chart_layer", "inflation_layer"]
+      # `sea_surface_relay` stamps lethal cells published by the local-costmap
+      # SeaSurfaceLayer (see rolker/unh_marine_perception#20). Producer-side
+      # publishing is opt-in via the local-costmap layer's `published_topic`
+      # parameter — when no producer is wired, the relay is a silent no-op.
+      plugins: ["chart_layer", "sea_surface_relay", "inflation_layer"]
+      sea_surface_relay:
+        plugin: "sea_surface_layer::SeaSurfaceRelayLayer"
+        enabled: True
+        topic: <robot_namespace>/sea_surface/lethal_grid
       chart_layer:
         plugin: "s57_layer::S57Layer"
         enabled: True
