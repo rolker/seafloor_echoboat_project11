@@ -129,13 +129,13 @@ controller / behaviors ──cmd_vel_nav──▶ velocity_smoother ──cmd_ve
 - ~~**Yaw cap value (240)?**~~ **Resolved (Roland, 2026-06-02):** keep steady-state
   yaw rate at full `1.0` rad/s; govern the snap with the yaw **accel** cap, starting
   at `0.5` rad/s² (~2 s ramp), sim/on-water tunable. See Context.
-- **Enable for IzzyBoat (160) too?** The shared launch/lifecycle list re-enables the
-  smoother for both hulls. Izzy's caps are already tuned and distinct, but it's in
-  testing — OK to enable now, or gate to 240 only (would require per-model launch
-  logic)?
-- **On-water validation window:** the sim retest is in-scope here; the on-water
-  Collision-Monitor-interaction check needs a deployment slot before the June 4 dev
-  freeze. Schedule under an existing deployment issue or a dedicated test run?
+- ~~**Enable for IzzyBoat (160) too?**~~ **Resolved (Roland, 2026-06-02): both.**
+  The shared launch/lifecycle list re-enables the smoother for both hulls — no
+  per-model gating, which is also the simpler path. Izzy's existing distinct caps
+  (yaw 1.5, accel 1.2) stand.
+- ~~**On-water validation window?**~~ **Resolved (Roland, 2026-06-02):** bundle the
+  on-water Collision-Monitor-interaction check into the **next existing deployment
+  issue's** validation, not a standalone test run. (Sim retest remains in-scope here.)
 
 ## Estimated Scope
 
