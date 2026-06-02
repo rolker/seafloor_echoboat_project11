@@ -46,7 +46,9 @@ def generate_launch_description():
         'smoother_server',
         'planner_server',
         'behavior_server',
-        # velocity_smoother removed from the active path (#170) — see node block below
+        # velocity_smoother re-enabled (#36), now upstream of the Collision Monitor
+        # (cmd_vel_nav -> smoother -> cmd_vel_smoothed -> monitor) — see node block below
+        'velocity_smoother',
         'collision_monitor',
         #'bt_navigator',
         'manda_coverage',
@@ -226,14 +228,31 @@ def generate_launch_description():
                 namespace="",
                 emulate_tty=True
             ),
-            # velocity_smoother intentionally removed from the active path (#170).
-            # The cmd_vel filter chain is deliberately disconnected on these boats,
-            # so the controller feeds the Collision Monitor directly via cmd_vel_nav.
-            # Leaving the smoother here would put a second publisher on
-            # piloting_mode/autonomous/cmd_vel, competing with the monitor. To
-            # re-enable smoothing later, restore this node with its output remapped
-            # to cmd_vel_smoothed and set collision_monitor cmd_vel_in_topic back to
-            # cmd_vel_smoothed (and re-add 'velocity_smoother' to lifecycle_nodes).
+            # velocity_smoother re-enabled (#36), inserted UPSTREAM of the Collision
+            # Monitor: it subscribes to the controller/behaviors output (cmd_vel_nav)
+            # and publishes the Nav2-default cmd_vel_smoothed, which the monitor then
+            # gates (collision_monitor cmd_vel_in_topic: cmd_vel_smoothed in
+            # nav2_params.base.yaml) before emitting piloting_mode/autonomous/cmd_vel.
+            # Output is deliberately left at cmd_vel_smoothed and NOT remapped to the
+            # helm topic — remapping it there was the #27 double-publisher bug (two
+            # publishers on piloting_mode/autonomous/cmd_vel: the smoother and the
+            # monitor). The monitor stays the sole helm publisher.
+            LifecycleNode(
+                package='nav2_velocity_smoother',
+                executable='velocity_smoother',
+                name='velocity_smoother',
+                output='screen',
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[configured_params],
+                arguments=['--ros-args', '--log-level', log_level],
+                # Input only: subscribe to the controller/behaviors output. Output
+                # stays at the default cmd_vel_smoothed (do NOT route to the helm
+                # topic — see comment above / #27).
+                remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
+                namespace="",
+                emulate_tty=True
+            ),
             LifecycleNode(
                 package='nav2_collision_monitor',
                 executable='collision_monitor',
@@ -272,14 +291,15 @@ def generate_launch_description():
         ],
     )
 
-    # NOTE (#170): this composition path mirrors the non-composition routing —
-    # controller/behaviors publish cmd_vel_nav and the Collision Monitor gates it
-    # (cmd_vel_in_topic: cmd_vel_nav -> cmd_vel_out_topic:
-    # piloting_mode/autonomous/cmd_vel, both from nav2_params.base.yaml). velocity_smoother
-    # is omitted here too (the cmd_vel filter chain is deliberately disconnected on
-    # these boats; it is also absent from lifecycle_nodes above). This path stays
-    # UNUSED in the field (use_composition=False), but is kept consistent so enabling
-    # composition cannot silently reintroduce the gating bypass.
+    # NOTE (#36): this composition path mirrors the non-composition routing —
+    # controller/behaviors publish cmd_vel_nav -> velocity_smoother (input remapped
+    # to cmd_vel_nav, output at the default cmd_vel_smoothed) -> Collision Monitor
+    # (cmd_vel_in_topic: cmd_vel_smoothed -> cmd_vel_out_topic:
+    # piloting_mode/autonomous/cmd_vel, both from nav2_params.base.yaml). The smoother
+    # is included here too and is present in lifecycle_nodes above. Its output is NOT
+    # remapped to the helm topic (that was the #27 double-publisher bug). This path
+    # stays UNUSED in the field (use_composition=False), but is kept consistent so
+    # enabling composition cannot silently drop the smoother or reintroduce the bypass.
     load_composable_nodes = GroupAction(
         condition=IfCondition(use_composition),
         actions=[
@@ -337,9 +357,17 @@ def generate_launch_description():
                         parameters=[configured_params],
                         remappings=remappings,
                     ),
-                    # velocity_smoother intentionally omitted (see NOTE above) —
-                    # mirrors its removal from the non-composition path so the
-                    # Collision Monitor is the sole publisher on the helm topic.
+                    # velocity_smoother re-enabled (#36), mirroring the non-composition
+                    # path: input remapped to cmd_vel_nav, output left at the default
+                    # cmd_vel_smoothed (NOT the helm topic — #27). The Collision Monitor
+                    # remains the sole publisher on piloting_mode/autonomous/cmd_vel.
+                    ComposableNode(
+                        package='nav2_velocity_smoother',
+                        plugin='nav2_velocity_smoother::VelocitySmoother',
+                        name='velocity_smoother',
+                        parameters=[configured_params],
+                        remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
+                    ),
                     ComposableNode(
                         package='nav2_collision_monitor',
                         plugin='nav2_collision_monitor::CollisionMonitor',
