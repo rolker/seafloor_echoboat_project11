@@ -82,7 +82,12 @@ def test_merged_240_hull_values():
     assert _gc(p)['robot_radius'] == 1.5
     assert 'footprint' in _lc(p) and 'footprint' in _gc(p)
     assert p['planner_server']['ros__parameters']['GridBased']['minimum_turning_radius'] == 1.5
-    assert p['velocity_smoother']['ros__parameters']['max_velocity'] == [2.75, 0.0, 0.45]
+    # Yaw speed cap is the full 1.0 rad/s capability; the yaw accel cap is the
+    # governor (#36). Guards against a revert to the old 0.45 survey speed clamp.
+    vs = p['velocity_smoother']['ros__parameters']
+    assert vs['max_velocity'] == [2.75, 0.0, 1.0]
+    assert vs['max_accel'] == [0.8, 0.0, 0.5]
+    assert vs['max_decel'] == [-0.45, 0.0, -0.5]
     bs = p['behavior_server']['ros__parameters']
     assert bs['max_rotational_vel'] == 1.0
     assert bs['hover']['maximum_speed'] == 1.0
@@ -185,7 +190,10 @@ def test_base_has_no_sensor_rig_or_reflex():
     assert lc['plugins'] == ['chart_layer', 'inflation_layer']
     assert not [k for k in lc if 'sea_surface' in k]
     cm = base['collision_monitor']['ros__parameters']
-    # gating wiring stays; reflex zones/sources move to the instance overlay
-    assert cm['cmd_vel_in_topic'] == 'cmd_vel_nav'
+    # gating wiring stays; reflex zones/sources move to the instance overlay.
+    # The monitor's input is the velocity_smoother output (#36): the smoother sits
+    # upstream (cmd_vel_nav -> smoother -> cmd_vel_smoothed -> monitor), so the
+    # reflex still gates the final command.
+    assert cm['cmd_vel_in_topic'] == 'cmd_vel_smoothed'
     assert cm['polygons'] == []
     assert cm['observation_sources'] == []
