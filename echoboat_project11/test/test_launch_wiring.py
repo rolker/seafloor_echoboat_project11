@@ -142,3 +142,20 @@ def test_monitor_input_chains_to_smoother_output():
     assert cm['cmd_vel_in_topic'] == 'cmd_vel_smoothed'
     # and the monitor alone emits the helm topic
     assert cm['cmd_vel_out_topic'] == _HELM_TOPIC
+
+
+def test_stamped_cmd_vel_consistent_across_chain():
+    """Every hop must agree on TwistStamped vs Twist (enable_stamped_cmd_vel).
+    Nav2's TwistSubscriber/TwistPublisher pick the message type off this per-node
+    param; a single node disagreeing silently breaks the topic connection (wrong
+    type = no delivery), with no launch-time or runtime error. A new node added to
+    the chain with the param defaulted/omitted is the realistic regression."""
+    with open(os.path.join(_CONFIG, 'nav2_params.base.yaml')) as f:
+        base = yaml.safe_load(f)
+    chain = ['controller_server', 'behavior_server', 'velocity_smoother',
+             'collision_monitor']
+    for node in chain:
+        params = base[node]['ros__parameters']
+        assert params.get('enable_stamped_cmd_vel') is True, (
+            f'{node} must set enable_stamped_cmd_vel: true to match the cmd_vel chain'
+        )
