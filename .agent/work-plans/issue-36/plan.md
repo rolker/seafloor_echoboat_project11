@@ -19,9 +19,21 @@ thrusters unfiltered. Deployment #197 (2026-05-29) showed the failure mode: a
 near-stop hard pivot + accel snapped yaw to the 1.0 cap as a step and induced
 ±30° hull roll.
 
-The smoother caps already exist in the per-model overlays and just aren't running:
-- `nav2_params.240.yaml`: yaw cap `0.45` rad/s, yaw accel `0.2` rad/s² (BizzyBoat)
-- `nav2_params.160.yaml`: yaw cap `1.5` rad/s, yaw accel `1.2` rad/s² (IzzyBoat, skid-steer)
+The smoother caps exist in the per-model overlays and just aren't running. The 240
+caps are **re-tuned** by this work (decision below):
+- `nav2_params.240.yaml`: yaw **speed** cap `0.45 → 1.0` rad/s (full helm capability),
+  yaw **accel** cap `0.2 → 0.5` rad/s² (BizzyBoat) — the accel limit, not the speed
+  cap, becomes the governor against the #197 snap-roll
+- `nav2_params.160.yaml`: yaw cap `1.5` rad/s, yaw accel `1.2` rad/s² (IzzyBoat,
+  skid-steer) — left as-is
+
+**Cap-tuning decision (resolves Open Question 1):** #197 was a yaw *step* (snapped to
+1.0 rad/s and reversed) that shock-loaded the hull into ±30° roll — not a "turned too
+fast" event. So we keep the steady-state yaw rate at the full `1.0` rad/s capability
+(no turn-radius penalty) and govern the transient with the yaw **acceleration** cap.
+`0.5` rad/s² ramps 0→1.0 rad/s over ~2.0 s (vs the ~0.2 s control-tick step that rolled
+her), symmetric `max_decel = -0.5` since the event involved a reversal. Starting value;
+sim/on-water tunable (0.2 = 5 s sluggish … 1.0 = 1 s aggressive).
 
 **Why it was removed (#27):** the *old* wiring had the smoother publish its output
 (`cmd_vel_smoothed`) **directly to the helm topic** `piloting_mode/autonomous/cmd_vel`.
@@ -69,7 +81,12 @@ controller / behaviors ──cmd_vel_nav──▶ velocity_smoother ──cmd_ve
    and (c) `collision_monitor.cmd_vel_in_topic == 'cmd_vel_smoothed'` chains to the
    smoother's output. Implement by AST-parsing `navigation_launch.py` (the existing
    test already imports from `launch/`), matching the style of `test_param_compose.py`.
-8. **Retest the Collision Monitor interaction in sim** — the reflex stop must still
+8. **Re-tune the 240 yaw caps** in `nav2_params.240.yaml`: `max_velocity` yaw
+   `0.45 → 1.0`, `min_velocity` yaw `-0.45 → -1.0`, `max_accel` yaw `0.2 → 0.5`,
+   `max_decel` yaw `-0.2 → -0.5` (x/y components unchanged). Update
+   `test_param_compose.py::test_merged_240_hull_values` (line 85), which asserts
+   `max_velocity == [2.75, 0.0, 0.45]`, to `[2.75, 0.0, 1.0]`.
+9. **Retest the Collision Monitor interaction in sim** — the reflex stop must still
    gate correctly with the smoother upstream (smoothed cmd_vel → monitor → helm).
    Then on-water at Lake Massabesic survey speeds before relying on it.
 
@@ -79,7 +96,8 @@ controller / behaviors ──cmd_vel_nav──▶ velocity_smoother ──cmd_ve
 |------|--------|
 | `echoboat_project11/launch/navigation_launch.py` | Re-add `velocity_smoother` node (non-composition + composition), input remap `cmd_vel→cmd_vel_nav`, re-add to `lifecycle_nodes`, refresh comments |
 | `echoboat_project11/config/nav2_params.base.yaml` | `collision_monitor.cmd_vel_in_topic`: `cmd_vel_nav → cmd_vel_smoothed` + comment |
-| `echoboat_project11/test/test_param_compose.py` | Update `cmd_vel_in_topic` assertion to `cmd_vel_smoothed` |
+| `echoboat_project11/config/nav2_params.240.yaml` | yaw caps: `max_velocity`/`min_velocity` `±0.45 → ±1.0`, `max_accel`/`max_decel` yaw `±0.2 → ±0.5` |
+| `echoboat_project11/test/test_param_compose.py` | Update `cmd_vel_in_topic` assertion → `cmd_vel_smoothed`; update `test_merged_240_hull_values` `max_velocity` → `[2.75, 0.0, 1.0]` |
 | `echoboat_project11/test/test_launch_wiring.py` (new) | Regression test locking smoother-in-lifecycle + no helm double-publish + monitor input chains to smoother |
 
 ## Principles Self-Check
@@ -108,10 +126,9 @@ controller / behaviors ──cmd_vel_nav──▶ velocity_smoother ──cmd_ve
 
 ## Open Questions
 
-- **Yaw cap value (240):** keep the existing `0.45` rad/s survey cap (≈3.4 m turn
-  radius at 1.52 m/s cruise, vs ≈1.5 m at the 1.0 helm clamp)? The issue recommends
-  keeping `0.45` and leaving `max_yaw_speed: 1.0` as the helm capability backstop.
-  Confirm before tuning, since it directly sets survey turn geometry.
+- ~~**Yaw cap value (240)?**~~ **Resolved (Roland, 2026-06-02):** keep steady-state
+  yaw rate at full `1.0` rad/s; govern the snap with the yaw **accel** cap, starting
+  at `0.5` rad/s² (~2 s ramp), sim/on-water tunable. See Context.
 - **Enable for IzzyBoat (160) too?** The shared launch/lifecycle list re-enables the
   smoother for both hulls. Izzy's caps are already tuned and distinct, but it's in
   testing — OK to enable now, or gate to 240 only (would require per-model launch
