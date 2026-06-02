@@ -39,10 +39,17 @@ velocity_smoother:
     # Yaw is governed by the ACCELERATION cap, not the speed cap (#36). The #197
     # snap-roll was a yaw *step* (snapped to 1.0 rad/s and reversed → ±30° hull
     # roll), not over-speed. So the steady-state yaw rate keeps the full 1.0 rad/s
-    # vectored-thrust capability (matching the helm max_yaw_speed backstop) while
-    # the yaw accel/decel cap (±0.5 rad/s², ~2 s ramp 0→1.0) spreads the moment
-    # buildup that drove the roll. Starting value — sim/on-water tunable.
+    # vectored-thrust capability (matching the helm max_yaw_speed backstop).
+    #
+    # 2026-06-02 FIELD TUNE (BizzyBoat/gabby): yaw accel/decel ±0.5 → ±3.0 rad/s².
+    # The ±0.5 cap (~2 s ramp 0→1.0) lagged the direct-tuned CrabbingPathFollower
+    # PID → windup + hunting ("drunk" line-following, XTE median 0.94 m). ±3.0
+    # (~0.3 s ramp 0→1.0) restored clean tracking (XTE 0.45 m = the pre-smoother
+    # baseline), confirmed on water. ⚠️ This re-opens the #197 snap-roll risk the
+    # ±0.5 was guarding against — validated only on smooth avoider bends today,
+    # NOT on a sharp yaw step/reversal. SIM-VALIDATE the roll response before
+    # trusting; back off toward ±1.5 if a sharp reversal rolls the hull.
     max_velocity: [2.75, 0.0, 1.0]
     min_velocity: [-0.5, 0.0, -1.0]
-    max_accel: [0.8, 0.0, 0.5]
-    max_decel: [-0.45, 0.0, -0.5]
+    max_accel: [0.8, 0.0, 3.0]
+    max_decel: [-0.45, 0.0, -3.0]
