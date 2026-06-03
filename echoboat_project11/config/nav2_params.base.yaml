@@ -100,7 +100,12 @@ local_costmap:
       plugins: ["chart_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 0.05
+        # cost_scaling_factor 1.0 (raised from 0.05): 0.05 was tuned for the old
+        # 150 m radius (gentle decay over a huge distance); over a 3 m radius it
+        # leaves the whole buffer near-lethal (~217 at 3 m). 1.0 gives a graded ramp
+        # over the 3 m (~93 / 34 / 12 at 1 / 2 / 3 m) so the avoider swerves around
+        # obstacles with increasing urgency rather than treating 3 m as a hard wall.
+        cost_scaling_factor: 1.0
         # LOCAL inflation is a tight safety buffer only (3 m), NOT the route-level
         # coast/obstacle pushoff — that stays 150 m on the global costmap (planner).
         # The AvoidanceController reads the LOCAL costmap; a 150 m local halo made it
