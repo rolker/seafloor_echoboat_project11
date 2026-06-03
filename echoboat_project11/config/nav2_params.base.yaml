@@ -101,7 +101,16 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 0.05
-        inflation_radius: 150.0
+        # LOCAL inflation is a tight safety buffer only (3 m), NOT the route-level
+        # coast/obstacle pushoff — that stays 150 m on the global costmap (planner).
+        # The AvoidanceController reads the LOCAL costmap; a 150 m local halo made it
+        # weave the survey line along the buffer gradient near charted structures
+        # (nav#63, 2026-06-02 pier — boat worked entirely inside the halo). 3 m lets
+        # it deviate only for a tight buffer around lethal cells + discrete
+        # sea-surface marks; the Collision Monitor reflex (5 m stop) is the
+        # independent hard backstop. First try — re-tune if the avoider cuts
+        # obstacles too close. (seafloor#40 / addresses nav#63)
+        inflation_radius: 3.0
       chart_layer:
         plugin: "s57_layer::S57Layer"
         enabled: True
