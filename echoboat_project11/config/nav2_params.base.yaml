@@ -112,8 +112,8 @@ local_costmap:
         # weave the survey line along the buffer gradient near charted structures
         # (nav#63, 2026-06-02 pier — boat worked entirely inside the halo). 3 m lets
         # it deviate only for a tight buffer around lethal cells + discrete
-        # sea-surface marks; the Collision Monitor reflex (5 m stop) is the
-        # independent hard backstop. First try — re-tune if the avoider cuts
+        # sea-surface marks; the Collision Monitor reflex (zones configured per-boat
+        # in the instance overlay) is the independent hard backstop. First try — re-tune if the avoider cuts
         # obstacles too close. (seafloor#40 / addresses nav#63)
         inflation_radius: 3.0
       chart_layer:
