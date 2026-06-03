@@ -36,8 +36,9 @@ behavior_server:
 
 velocity_smoother:
   ros__parameters:
-    # Yaw is governed by the ACCELERATION cap, not the speed cap (#36). The #197
-    # snap-roll was a yaw *step* (snapped to 1.0 rad/s and reversed → ±30° hull
+    # Yaw is governed by the ACCELERATION cap, not the speed cap (#36). The
+    # deployment-197 (2026-05-29 run) snap-roll was a yaw *step* (snapped to
+    # 1.0 rad/s and reversed → ±30° hull
     # roll), not over-speed. So the steady-state yaw rate keeps the full 1.0 rad/s
     # vectored-thrust capability (matching the helm max_yaw_speed backstop).
     #
@@ -45,10 +46,12 @@ velocity_smoother:
     # The ±0.5 cap (~2 s ramp 0→1.0) lagged the direct-tuned CrabbingPathFollower
     # PID → windup + hunting ("drunk" line-following, XTE median 0.94 m). ±3.0
     # (~0.3 s ramp 0→1.0) restored clean tracking (XTE 0.45 m = the pre-smoother
-    # baseline), confirmed on water. ⚠️ This re-opens the #197 snap-roll risk the
-    # ±0.5 was guarding against — validated only on smooth avoider bends today,
-    # NOT on a sharp yaw step/reversal. SIM-VALIDATE the roll response before
-    # trusting; back off toward ±1.5 if a sharp reversal rolls the hull.
+    # baseline), confirmed on water. ⚠️ This re-opens the deployment-197 snap-roll
+    # risk the ±0.5 was guarding against — validated only on smooth avoider bends
+    # today, NOT on a sharp yaw step/reversal. The sim does NOT model hull-roll
+    # dynamics, so it can't validate this: WATCH for hull roll on sharp yaw
+    # reversals during on-water ops, and back off toward ±1.5 if a sharp reversal
+    # rolls the hull (operator decision, #38 wrap-up).
     max_velocity: [2.75, 0.0, 1.0]
     min_velocity: [-0.5, 0.0, -1.0]
     max_accel: [0.8, 0.0, 3.0]
