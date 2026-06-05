@@ -16,6 +16,7 @@
   <exec_depend>mavros</exec_depend>
   <exec_depend>mavros_extras</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>marine_nav_ca_safety</exec_depend>
   <exec_depend>echo_helm</exec_depend>
   <exec_depend>ros2launch</exec_depend>
   <!-- param_compose.py imports yaml at launch time (composed by nav2_bringup_launch.py) -->

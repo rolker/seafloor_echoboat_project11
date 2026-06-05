@@ -184,6 +184,13 @@ def generate_launch_description():
         'log_level', default_value='info', description='log level'
     )
 
+    declare_use_ca_safety_cmd = DeclareLaunchArgument(
+        'use_ca_safety',
+        default_value='true',
+        description='Use the marine CA safety node as the helm gate (default); '
+        'false reverts to the nav2 Collision Monitor. Requires use_composition=false.',
+    )
+
     # Specify the actions
     bringup_cmd_group = GroupAction(
         [
@@ -210,6 +217,7 @@ def generate_launch_description():
                     'params_file': params_file,
                     'use_composition': use_composition,
                     'use_respawn': use_respawn,
+                    'use_ca_safety': LaunchConfiguration('use_ca_safety'),
                     'container_name': 'nav2_container',
                 }.items(),
             ),
@@ -235,6 +243,7 @@ def generate_launch_description():
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
+    ld.add_action(declare_use_ca_safety_cmd)
     ld.add_action(declare_use_localization_cmd)
 
     # Compose base + per-model params into params_file (unless one was passed),

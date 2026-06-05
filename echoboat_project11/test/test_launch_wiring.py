@@ -10,6 +10,11 @@ The Collision Monitor must stay the SOLE publisher on the helm topic
 (piloting_mode/autonomous/cmd_vel). The #27 regression was the smoother
 publishing its output straight to the helm topic, competing with the monitor.
 
+As of #64 the marine CA safety node (`ca_safety`) is the DEFAULT helm gate,
+replacing the Collision Monitor (which stays as the `use_ca_safety:=false`
+fallback). Both read `cmd_vel_smoothed` and emit the helm topic via params, and
+are mutually exclusive in the launch — exactly one publishes the helm topic.
+
 These parse the launch file's AST (no ROS runtime needed) plus the shared base
 params, matching the static style of test_param_compose.py.
 """
@@ -159,3 +164,33 @@ def test_stamped_cmd_vel_consistent_across_chain():
         assert params.get('enable_stamped_cmd_vel') is True, (
             f'{node} must set enable_stamped_cmd_vel: true to match the cmd_vel chain'
         )
+
+
+# --- ca_safety is the default helm gate (#64), replacing the Collision Monitor ---
+
+def test_ca_safety_node_present():
+    """The marine CA safety node is launched as the default helm gate."""
+    names = [c[0] for c in _node_calls(_launch_tree())]
+    assert 'ca_safety' in names, 'ca_safety node not found in launch file'
+
+
+def test_ca_safety_does_not_remap_to_helm_topic():
+    """ca_safety emits the helm topic via its cmd_vel_out_topic param, never a
+    launch remap — the same #27 sole-publisher invariant as the Collision Monitor."""
+    for name, remaps in _node_calls(_launch_tree()):
+        if name == 'ca_safety':
+            targets = [dst for _, dst in remaps]
+            assert _HELM_TOPIC not in targets, (
+                'ca_safety remaps an output to the helm topic — reintroduces the '
+                '#27 double-publisher'
+            )
+
+
+def test_ca_safety_params_chain():
+    """ca_safety reads the smoother output and emits the helm topic — the same
+    chain endpoints as the Collision Monitor it replaces."""
+    with open(os.path.join(_CONFIG, 'nav2_params.base.yaml')) as f:
+        base = yaml.safe_load(f)
+    ca = base['ca_safety']['ros__parameters']
+    assert ca['cmd_vel_in_topic'] == 'cmd_vel_smoothed'
+    assert ca['cmd_vel_out_topic'] == _HELM_TOPIC
