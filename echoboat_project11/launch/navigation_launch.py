@@ -17,7 +17,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, GroupAction, OpaqueFunction, SetEnvironmentVariable
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import LoadComposableNodes, SetParameter
@@ -25,6 +25,21 @@ from launch_ros.actions import Node
 from launch_ros.actions import LifecycleNode
 from launch_ros.descriptions import ComposableNode, ParameterFile
 from nav2_common.launch import RewrittenYaml
+
+
+def _guard_ca_safety_composition(context, *args, **kwargs):
+    """ca_safety_node is a plain node, not a composable component, so it cannot
+    run under composition. Fail loudly rather than silently downgrading to the
+    Collision Monitor when both are requested (the composition path launches the
+    CM, not ca_safety)."""
+    def _truthy(name):
+        return LaunchConfiguration(name).perform(context).lower() in ('true', '1')
+    if _truthy('use_ca_safety') and _truthy('use_composition'):
+        raise RuntimeError(
+            'use_ca_safety:=true requires use_composition:=false (ca_safety_node is '
+            'not a composable component). Set use_ca_safety:=false to run the '
+            'Collision Monitor under composition.')
+    return []
 
 
 def generate_launch_description():
@@ -40,6 +55,10 @@ def generate_launch_description():
     container_name_full = (namespace, '/', container_name)
     use_respawn = LaunchConfiguration('use_respawn')
     log_level = LaunchConfiguration('log_level')
+    # ca_safety replaces the nav2 Collision Monitor as the helm gate (#64). It is
+    # the default; use_ca_safety:=false reverts to the proven Collision Monitor.
+    # The two are mutually exclusive — exactly one publishes the helm topic.
+    use_ca_safety = LaunchConfiguration('use_ca_safety')
 
     lifecycle_nodes = [
         'controller_server',
@@ -56,6 +75,11 @@ def generate_launch_description():
         'waypoint_follower',
         'docking_server',
     ]
+
+    # When ca_safety is active the Collision Monitor is not launched, so it must
+    # not be in the lifecycle manager's node list (else the manager blocks waiting
+    # for a node that never appears).
+    lifecycle_nodes_no_monitor = [n for n in lifecycle_nodes if n != 'collision_monitor']
 
     # Map fully qualified names to relative ones so the node's namespace can be prepended.
     # In case of the transforms (tf), currently, there doesn't seem to be a better alternative
@@ -127,6 +151,15 @@ def generate_launch_description():
 
     declare_log_level_cmd = DeclareLaunchArgument(
         'log_level', default_value='info', description='log level'
+    )
+
+    declare_use_ca_safety_cmd = DeclareLaunchArgument(
+        'use_ca_safety',
+        default_value='true',
+        description='Use the marine CA safety node (marine_nav_ca_safety) as the helm '
+        'gate (default). Set false to revert to the nav2 Collision Monitor. Only '
+        'effective with use_composition:=false (ca_safety is not a composable '
+        'component); the launch errors if both are true.',
     )
 
     load_nodes = GroupAction(
@@ -253,6 +286,8 @@ def generate_launch_description():
                 namespace="",
                 emulate_tty=True
             ),
+            # Helm gate, option A (fallback): the nav2 Collision Monitor.
+            # Launched only when use_ca_safety:=false.
             LifecycleNode(
                 package='nav2_collision_monitor',
                 executable='collision_monitor',
@@ -264,7 +299,28 @@ def generate_launch_description():
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings,
                 namespace="",
-                emulate_tty=True
+                emulate_tty=True,
+                condition=UnlessCondition(use_ca_safety),
+            ),
+            # Helm gate, option B (default): the marine CA safety node (#64),
+            # which replaces the Collision Monitor (speed-scaled yaw-preserving
+            # slowdown + reverse-assisted stop). A plain (non-lifecycle) node, so
+            # it is NOT in the lifecycle manager's node list. Reads cmd_vel_smoothed
+            # and publishes the helm topic via its params (sole helm publisher when
+            # active). Requires non-composition (it is not a registered component).
+            Node(
+                package='marine_nav_ca_safety',
+                executable='ca_safety_node',
+                name='ca_safety',
+                output='screen',
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[configured_params],
+                arguments=['--ros-args', '--log-level', log_level],
+                remappings=remappings,
+                namespace="",
+                emulate_tty=True,
+                condition=IfCondition(use_ca_safety),
             ),
             LifecycleNode(
                 package='opennav_docking',
@@ -279,6 +335,9 @@ def generate_launch_description():
                 namespace="",
                 emulate_tty=True
             ),
+            # Two mutually-exclusive managers: the node list must match what is
+            # actually launched. With ca_safety active, the Collision Monitor is
+            # absent, so it is dropped from the managed list.
             Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
@@ -286,7 +345,18 @@ def generate_launch_description():
                 output='screen',
                 arguments=['--ros-args', '--log-level', log_level],
                 parameters=[{'autostart': autostart}, {'node_names': lifecycle_nodes}],
-                emulate_tty=True
+                emulate_tty=True,
+                condition=UnlessCondition(use_ca_safety),
+            ),
+            Node(
+                package='nav2_lifecycle_manager',
+                executable='lifecycle_manager',
+                name='lifecycle_manager_navigation',
+                output='screen',
+                arguments=['--ros-args', '--log-level', log_level],
+                parameters=[{'autostart': autostart}, {'node_names': lifecycle_nodes_no_monitor}],
+                emulate_tty=True,
+                condition=IfCondition(use_ca_safety),
             ),
         ],
     )
@@ -410,6 +480,9 @@ def generate_launch_description():
     ld.add_action(declare_container_name_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
+    ld.add_action(declare_use_ca_safety_cmd)
+    # Reject the unsupported use_ca_safety + use_composition combo loudly.
+    ld.add_action(OpaqueFunction(function=_guard_ca_safety_composition))
     # Add the actions to launch all of the navigation nodes
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
