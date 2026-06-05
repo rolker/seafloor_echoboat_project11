@@ -170,8 +170,12 @@ def generate_launch_description():
 
     declare_use_composition_cmd = DeclareLaunchArgument(
         'use_composition',
-        default_value='True',
-        description='Whether to use composed bringup',
+        # Default False so it is self-consistent with use_ca_safety=true (the CA
+        # safety node is a plain node, not a composable component — it runs only
+        # under non-composition). The field already pins this False.
+        default_value='False',
+        description='Whether to use composed bringup. Must be False when '
+        'use_ca_safety is true (the default).',
     )
 
     declare_use_respawn_cmd = DeclareLaunchArgument(

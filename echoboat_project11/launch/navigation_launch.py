@@ -17,7 +17,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, GroupAction, OpaqueFunction, SetEnvironmentVariable
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import LoadComposableNodes, SetParameter
@@ -25,6 +25,21 @@ from launch_ros.actions import Node
 from launch_ros.actions import LifecycleNode
 from launch_ros.descriptions import ComposableNode, ParameterFile
 from nav2_common.launch import RewrittenYaml
+
+
+def _guard_ca_safety_composition(context, *args, **kwargs):
+    """ca_safety_node is a plain node, not a composable component, so it cannot
+    run under composition. Fail loudly rather than silently downgrading to the
+    Collision Monitor when both are requested (the composition path launches the
+    CM, not ca_safety)."""
+    def _truthy(name):
+        return LaunchConfiguration(name).perform(context).lower() in ('true', '1')
+    if _truthy('use_ca_safety') and _truthy('use_composition'):
+        raise RuntimeError(
+            'use_ca_safety:=true requires use_composition:=false (ca_safety_node is '
+            'not a composable component). Set use_ca_safety:=false to run the '
+            'Collision Monitor under composition.')
+    return []
 
 
 def generate_launch_description():
@@ -464,6 +479,8 @@ def generate_launch_description():
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
     ld.add_action(declare_use_ca_safety_cmd)
+    # Reject the unsupported use_ca_safety + use_composition combo loudly.
+    ld.add_action(OpaqueFunction(function=_guard_ca_safety_composition))
     # Add the actions to launch all of the navigation nodes
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
