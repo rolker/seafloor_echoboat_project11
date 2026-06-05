@@ -157,7 +157,9 @@ def generate_launch_description():
         'use_ca_safety',
         default_value='true',
         description='Use the marine CA safety node (marine_nav_ca_safety) as the helm '
-        'gate (default). Set false to revert to the nav2 Collision Monitor.',
+        'gate (default). Set false to revert to the nav2 Collision Monitor. Only '
+        'effective with use_composition:=false (ca_safety is not a composable '
+        'component); the launch errors if both are true.',
     )
 
     load_nodes = GroupAction(

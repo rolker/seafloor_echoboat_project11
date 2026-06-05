@@ -194,3 +194,21 @@ def test_ca_safety_params_chain():
     ca = base['ca_safety']['ros__parameters']
     assert ca['cmd_vel_in_topic'] == 'cmd_vel_smoothed'
     assert ca['cmd_vel_out_topic'] == _HELM_TOPIC
+
+
+def _remappings_var_targets(tree):
+    """Remap targets in the module-level `remappings = [...]` assignment."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == 'remappings' for t in node.targets
+        ):
+            return [dst for _, dst in _remap_tuples(node.value)]
+    return []
+
+
+def test_remappings_var_does_not_target_helm_topic():
+    """The shared `remappings` list is applied to ca_safety (and others) via
+    `remappings=remappings`, which `_node_calls()` can't see (it only reads list
+    literals inside the call). A helm-topic remap added to this shared var would
+    slip past the per-node #27 guard, so assert the variable itself is clean."""
+    assert _HELM_TOPIC not in _remappings_var_targets(_launch_tree())
