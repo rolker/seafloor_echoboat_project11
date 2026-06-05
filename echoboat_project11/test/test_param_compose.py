@@ -82,12 +82,17 @@ def test_merged_240_hull_values():
     assert _gc(p)['robot_radius'] == 1.5
     assert 'footprint' in _lc(p) and 'footprint' in _gc(p)
     assert p['planner_server']['ros__parameters']['GridBased']['minimum_turning_radius'] == 1.5
-    # Yaw speed cap is the full 1.0 rad/s capability; the yaw accel cap is the
-    # governor (#36). Guards against a revert to the old 0.45 survey speed clamp.
+    # Yaw uses the full 1.0 rad/s speed cap; the governor is the yaw ACCEL cap.
+    # Field-tuned +-0.5 -> +-3.0 (d35a795, 2026-06-02 gabby): +-0.5 (~2 s ramp)
+    # lagged the CrabbingPathFollower PID -> line-following hunting (XTE 0.94 m);
+    # +-3.0 (~0.3 s ramp) restored clean tracking (XTE 0.45 m), confirmed on water.
+    # Locks the deployed value against an accidental revert. NB +-3.0 re-opens the
+    # deployment-197 snap-roll risk -> on-water roll watch / back-off to +-1.5 is a
+    # deployment check (echoboats #228), not a test concern.
     vs = p['velocity_smoother']['ros__parameters']
     assert vs['max_velocity'] == [2.75, 0.0, 1.0]
-    assert vs['max_accel'] == [0.8, 0.0, 0.5]
-    assert vs['max_decel'] == [-0.45, 0.0, -0.5]
+    assert vs['max_accel'] == [0.8, 0.0, 3.0]
+    assert vs['max_decel'] == [-0.45, 0.0, -3.0]
     bs = p['behavior_server']['ros__parameters']
     assert bs['max_rotational_vel'] == 1.0
     assert bs['hover']['maximum_speed'] == 1.0
