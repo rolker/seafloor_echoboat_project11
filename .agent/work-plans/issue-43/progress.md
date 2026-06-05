@@ -24,3 +24,17 @@ issue: 43
 ### Notes
 - Non-composition (field) path verified correct by both reviewers: mutually-exclusive helm publisher, consistent lifecycle-manager node lists, matching param block/topics/frames/odom, preserved CM fallback.
 - test_launch_wiring.py passes (incl. new ca_safety assertions). Pre-existing, NOT from #43: test_param_compose::test_merged_240_hull_values fails (nav2_params.240.yaml yaw accel/decel z=3.0/-3.0 vs #36-intent 0.5) — flagged for separate triage.
+
+## Integrated Review
+**Status**: complete
+**When**: 2026-06-05 01:58 -04:00
+**By**: Claude Code Agent (Claude Opus 4.8 (1M context))
+**PR**: #44 (+ companion unh_echoboats #227)
+**Sources**: Copilot PR review (#44: 3 inline; #227: 0)
+**Verdict**: must-fix already resolved by review-code; remainder addressed in `2191b06`
+
+### Findings
+- [x] (valid, pre-resolved) composition contradictory defaults silently ran the CM — fixed in `2c14e23` (use_composition default→false + hard guard); Copilot independently re-confirmed
+- [x] (valid) use_ca_safety help didn't note non-composition-only → clarified (`2191b06`)
+- [x] (valid) remap test missed the shared `remappings` var → added an explicit assertion (`2191b06`)
+- #227: no actionable findings (clean)
