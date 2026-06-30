@@ -231,7 +231,10 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings + [('soundings','sensors/deltat/soundings')],
+                # Sonar coverage input: M3 multibeam (the live survey sonar).
+                # Was sensors/deltat/soundings, but DeltaT is off/uninstalled, which
+                # left manda_coverage planning off a silent feed (found 2026-06-29).
+                remappings=remappings + [('soundings','sensors/m3/soundings')],
                 namespace="",
                 emulate_tty=True,
             ),
