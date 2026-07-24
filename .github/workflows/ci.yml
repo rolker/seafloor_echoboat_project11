@@ -1,0 +1,81 @@
+# CI for seafloor_echoboat_project11.
+# From the workspace template (.agent/templates/ci_workflow.yml);
+# see ADR-0004/0005 for the enforcement hierarchy rationale.
+
+name: CI
+
+on:
+  push:
+    branches: [jazzy]
+  pull_request:
+    branches: [jazzy]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    container:
+      image: ros:jazzy-ros-core
+
+    steps:
+      - name: Update apt
+        run: apt-get update
+
+      - name: Install ros dev tools
+        run: DEBIAN_FRONTEND=noninteractive apt-get -y install ros-dev-tools
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Init rosdep
+        run: |
+          if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+            rosdep init
+          fi
+
+      - name: Update rosdep
+        run: rosdep update
+
+      - name: Create workspace
+        run: mkdir -p ../ws/src && ln -s "$GITHUB_WORKSPACE" ../ws/src/seafloor_echoboat_project11
+
+      # echo_helm's only first-party build dependency is marine_interfaces,
+      # a package inside the unh_marine_autonomy repo. Copy just that package
+      # so --packages-up-to builds it without dragging in the rest of the repo.
+      - name: Fetch marine_interfaces source dependency
+        run: |
+          git clone --depth 1 -b jazzy \
+            https://github.com/rolker/unh_marine_autonomy.git /tmp/uma
+          cp -r /tmp/uma/marine_interfaces ../ws/src/marine_interfaces
+
+      - name: Install ROS dependencies
+        working-directory: ../ws
+        run: >
+          DEBIAN_FRONTEND=noninteractive
+          rosdep install --from-paths src --ignore-src -r -y
+
+      - name: Build
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon build --packages-up-to
+          echoboat_project11 echo_helm
+          --cmake-args -DBUILD_TESTING=ON'
+
+      - name: Test
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          source install/setup.bash &&
+          colcon test --packages-select
+          echoboat_project11 echo_helm
+          --event-handlers console_direct+
+          --return-code-on-test-failure'
+
+      - name: Test results
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon test-result --verbose'
+        if: always()

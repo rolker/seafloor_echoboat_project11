@@ -1,4 +1,3 @@
-
 bt_task_navigator:
   ros__parameters:
     global_frame: <tf_prefix>/map
@@ -8,7 +7,7 @@ bt_task_navigator:
     default_server_timeout: 20
     wait_for_service_timeout: 1000
     action_server_result_timeout: 900.0
-    navigators: ["run_tasks",]
+    navigators: ["run_tasks"]
     run_tasks:
       plugin: "marine_nav_bt_task_navigator::TaskNavigator"
       debug: false
@@ -19,14 +18,13 @@ bt_task_navigator:
 
     # plugin_lib_names is used to add custom BT plugins to the executor (vector of strings).
     # Built-in plugins are added automatically
-    plugin_lib_names: 
+    plugin_lib_names:
       - marine_nav_behavior_tree_bt_plugins
 
     error_code_names:
       - compute_path_error_code
       - follow_path_error_code
       - hover_error_code
-
 
 
 controller_server:
@@ -38,7 +36,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugins: ["progress_checker"]
-    goal_checker_plugins: ["general_goal_checker"] # "precise_goal_checker"
+    goal_checker_plugins: ["general_goal_checker"]  # "precise_goal_checker"
     controller_plugins: ["FollowPath"]
     use_realtime_priority: false
     enable_stamped_cmd_vel: true
@@ -49,7 +47,7 @@ controller_server:
       required_movement_radius: 0.5
       movement_time_allowance: 10.0
     # Goal checker parameters
-    #precise_goal_checker:
+    # precise_goal_checker:
     #  plugin: "nav2_controller::SimpleGoalChecker"
     #  xy_goal_tolerance: 0.25
     #  yaw_goal_tolerance: 0.25
@@ -74,7 +72,7 @@ controller_server:
         # outputs crab angle (deg) to minimize cross-track error (m)
         # IzzyBoat-validated magnitude (kp=20 from f3aef48, Jun 2025) with
         # sign flipped to match the new marine_nav_crabbing_path_follower
-        # convention. Ben sim uses gentler p=-6.                               
+        # convention. Ben sim uses gentler p=-6.
         p: -20.0
         i: -0.5
         d: -0.6
@@ -82,7 +80,7 @@ controller_server:
         i_clamp_min: -30.0
         u_clamp_max: 90.0
         u_clamp_min: -90.0
-        activate_state_publisher: true    
+        activate_state_publisher: true
 
 local_costmap:
   local_costmap:
@@ -300,7 +298,7 @@ collision_monitor:
   ros__parameters:
     base_frame_id: <tf_prefix>/base_link
     odom_frame_id: <tf_prefix>/odom
-    cmd_vel_in_topic: "cmd_vel_smoothed"     # velocity_smoother output (cmd_vel_nav→smoother→here); monitor gates → out (#36)
+    cmd_vel_in_topic: "cmd_vel_smoothed"  # smoother output; monitor gates → out (#36)
     cmd_vel_out_topic: "piloting_mode/autonomous/cmd_vel"
     enable_stamped_cmd_vel: true
     state_topic: "collision_monitor_state"
@@ -353,8 +351,8 @@ docking_server:
       docking_threshold: 0.05
       staging_x_offset: -0.7
       use_external_detection_pose: true
-      use_battery_status: false # true
-      use_stall_detection: false # true
+      use_battery_status: false  # true
+      use_stall_detection: false  # true
 
       external_detection_timeout: 1.0
       external_detection_translation_x: -0.18
@@ -384,4 +382,3 @@ docking_server:
       projection_time: 5.0
       simulation_step: 0.1
       dock_collision_threshold: 0.3
-

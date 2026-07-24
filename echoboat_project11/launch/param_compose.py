@@ -40,9 +40,7 @@ def _load_layer(path):
     if data is None:
         return {}
     if not isinstance(data, dict):
-        raise RuntimeError(
-            f"param layer {path} must be a YAML mapping, got {type(data).__name__}"
-        )
+        raise RuntimeError(f"param layer {path} must be a YAML mapping, got {type(data).__name__}")
     return data
 
 
@@ -56,13 +54,13 @@ def merged_params(cfg_dir, model, instance_params=None):
     ``instance_params`` is an absolute path (e.g. a boat-instance package's
     overlay) or falsy to skip the third layer.
     """
-    overlay_path = os.path.join(cfg_dir, f'nav2_params.{model}.yaml')
+    overlay_path = os.path.join(cfg_dir, f"nav2_params.{model}.yaml")
     if not os.path.exists(overlay_path):
         raise RuntimeError(
             f"Unknown echoboat model '{model}': {overlay_path} not found "
             f"(expected nav2_params.<model>.yaml in {cfg_dir})"
         )
-    merged = _load_layer(os.path.join(cfg_dir, 'nav2_params.base.yaml'))
+    merged = _load_layer(os.path.join(cfg_dir, "nav2_params.base.yaml"))
     merged = deep_merge(merged, _load_layer(overlay_path))
     if instance_params:
         if not os.path.exists(instance_params):
@@ -75,7 +73,7 @@ def compose_merged_params(cfg_dir, model, instance_params=None):
     """Merge base + per-model (+ optional instance) overlays to a temp file path."""
     merged = merged_params(cfg_dir, model, instance_params)
     tmp = tempfile.NamedTemporaryFile(
-        mode='w', prefix=f'nav2_params_{model}_', suffix='.yaml', delete=False
+        mode="w", prefix=f"nav2_params_{model}_", suffix=".yaml", delete=False
     )
     yaml.safe_dump(merged, tmp, default_flow_style=False, sort_keys=False)
     tmp.close()

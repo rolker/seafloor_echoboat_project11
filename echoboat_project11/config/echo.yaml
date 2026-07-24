@@ -29,7 +29,7 @@
           position: "mavros/global_position/raw/fix"
           velocity: "mavros/global_position/raw/gps_vel"
     sensor_names:
-    - mru
+      - mru
 
 /**/helm_manager:
   ros__parameters:
@@ -46,7 +46,7 @@
     local_position:
       tf.send: false
     tgt_system: 1
-    tgt_component : 1
+    tgt_component: 1
     system_id: 255
     component_id: 240
     setpoint_velocity:
@@ -68,11 +68,11 @@
 #       minimum_speed: 0.01
 #       maximum_speed: 2.5
 
-    # grids:
-    #   - name: local
-    #     resolution: 3.0
-    #     length: 5000.0
-    #     period: 1.0
+#     grids:
+#       - name: local
+#         resolution: 3.0
+#         length: 5000.0
+#         period: 1.0
 
 /**/udp_bridge:
   ros__parameters:
@@ -85,4 +85,3 @@
               mavros_position: {source: mavros/global_position/raw/fix}
               mavros_velocity: {source: mavros/global_position/raw/gps_vel}
               mavros_position_ekf: {source: mavros/global_position/global}
-            
