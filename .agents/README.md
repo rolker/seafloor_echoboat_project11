@@ -77,8 +77,12 @@ per-instance layer.
   (scales 2 m/s → full throttle, 1.5 rad/s → full rudder, with deadband
   compensation) and use MANUAL.
 - **Standby → active** transition: disarm → set mode (GUIDED or MANUAL per
-  `rc_mode`) → arm. **Entering standby disarms** and returns to MANUAL.
-  While in standby, incoming cmd_vel is dropped.
+  `rc_mode`) → re-arm. **Entering standby runs the same
+  disarm → set MANUAL → re-arm chain** (`standbyCallback` reuses
+  `armFromGuidedCallback`), so the net standby state is **armed, in
+  MANUAL** — consistent with "Standby hands the boat to manual RC
+  control" (an armed FCU is what makes RC driving live). While in
+  standby, incoming cmd_vel is dropped.
 - Heartbeat on `marine/status/helm` relays FCU state as key/values
   (`marine_autonomy_standby`, `connected`, `armed`, `guided`, `mode`) at the
   `mavros/state` rate; on activate the node requests a 10 Hz stream rate.
@@ -137,8 +141,14 @@ source ../../../.agent/scripts/setup.bash && colcon test --packages-select echob
 - **`nav2_bringup_launch.py` is adapted from upstream nav2_bringup** and
   carries its Apache-2.0/Intel header while the packages declare BSD — keep
   the header intact when editing.
-- **Entering standby disarms the FCU** (by design — see
-  `echo_helm_node.cpp::standbyCallback`); don't "fix" the disarm as a bug.
+- **Standby leaves the FCU armed in MANUAL** (disarm → MANUAL → re-arm; see
+  `standbyCallback` / `armFromGuidedCallback` reuse in
+  `echo_helm_node.cpp`). This makes RC driving live in standby — treat any
+  change to the arming chain as safety-relevant and get on-water sign-off.
+- **`echoboat_project11` declares `marine_autonomy` as `exec_depend` only**
+  (launch-time include). A gratuitous `find_package(marine_autonomy
+  REQUIRED)` was removed from its CMakeLists during onboarding — don't
+  reintroduce build-time deps into this config-only package.
 - The Nav2/behavior rates here are marine-vessel rates (~10 Hz class), not
   Nav2's small-indoor-robot defaults — don't bump them to match upstream
   examples (workspace knowledge: `ros2_development_patterns.md`).
