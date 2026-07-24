@@ -32,7 +32,7 @@ public:
   {
 
   }
-  
+
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
   on_configure(const rclcpp_lifecycle::State &)
   {
@@ -41,7 +41,7 @@ public:
     RCLCPP_INFO_STREAM(get_logger(), "RC mode: " << rc_mode_);
 
     status_publisher_ = create_publisher<marine_interfaces::msg::Heartbeat> ("marine/status/helm", 10);
-    
+
     cmd_vel_publisher_ = create_publisher<geometry_msgs::msg::TwistStamped>("mavros/setpoint_velocity/cmd_vel", 10);
 
     rc_override_publisher_ = create_publisher<mavros_msgs::msg::OverrideRCIn>("mavros/rc/override", 1);
@@ -49,13 +49,13 @@ public:
     cmd_vel_subscription_ = create_subscription<geometry_msgs::msg::TwistStamped>("marine/control/cmd_vel", 10, std::bind(&EchoHelm::cmdVelCallback, this, std::placeholders::_1));
 
     standby_subscription_ = create_subscription<std_msgs::msg::Bool>("piloting_mode/standby/active", 5, std::bind(&EchoHelm::standbyCallback, this, std::placeholders::_1));
-    
+
     state_subscription_ = create_subscription<mavros_msgs::msg::State>("mavros/state",10, std::bind(&EchoHelm::stateCallback, this, std::placeholders::_1));
 
     arm_service_client_ = create_client<mavros_msgs::srv::CommandBool>("mavros/cmd/arming");
     mode_service_client_ = create_client<mavros_msgs::srv::SetMode>("mavros/set_mode");
     stream_rate_service_client_ = create_client<mavros_msgs::srv::StreamRate>("mavros/set_stream_rate");
-    
+
     service_cleanup_timer_ = create_wall_timer(5s, std::bind(&EchoHelm::cleanupOldRequests, this));
 
     return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
@@ -65,7 +65,7 @@ public:
   on_activate(const rclcpp_lifecycle::State & state)
   {
     LifecycleNode::on_activate(state);
- 
+
     auto stream_rate = std::make_shared<mavros_msgs::srv::StreamRate::Request>();
     stream_rate->message_rate = 10;
     stream_rate->on_off = 1;
@@ -111,7 +111,7 @@ private:
   CommandBoolClient::SharedPtr arm_service_client_;
   rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr mode_service_client_;
   rclcpp::Client<mavros_msgs::srv::StreamRate>::SharedPtr stream_rate_service_client_;
-  
+
   rclcpp::TimerBase::SharedPtr service_cleanup_timer_;
 
   bool standby_ = true;
@@ -129,7 +129,7 @@ private:
     if(!pruned_requests.empty())
       RCLCPP_WARN_STREAM(get_logger(), "No response for at least 5 seconds from " << pruned_requests.size() << " set_mode service request(s)");
 
-    
+
     pruned_requests.clear();
     stream_rate_service_client_->prune_requests_older_than(timeout, &pruned_requests);
     if(!pruned_requests.empty())
@@ -233,7 +233,7 @@ private:
   {
     // from standby to active
     if(standby_ && !msg.data)
-    {  
+    {
       auto arm_request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
       arm_request->value = false;
       if(rc_mode_)
@@ -262,7 +262,7 @@ private:
     kv.key = "marine_autonomy_standby";
     kv.value = boolToString(standby_);
     hb.values.push_back(kv);
-    
+
     kv.key = "connected";
     kv.value = boolToString(inmsg.connected);
     hb.values.push_back(kv);
@@ -278,7 +278,7 @@ private:
     kv.key = "mode";
     kv.value = inmsg.mode;
     hb.values.push_back(kv);
-    
+
     status_publisher_->publish(hb);
   }
 };
@@ -291,7 +291,7 @@ int main(int argc, char **argv)
   rclcpp::executors::SingleThreadedExecutor exe;
   exe.add_node(helm->get_node_base_interface());
   exe.spin();
-  
+
   rclcpp::shutdown();
 
   return 0;
