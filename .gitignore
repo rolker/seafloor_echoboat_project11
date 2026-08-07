@@ -1,0 +1,8 @@
+# Python bytecode. These were tracked until 2026-08-06 (they arrived with
+# "Bring existing sources green under the new hooks", 5564128) and dirtied the
+# working tree on every import — merely running the launch-file helpers or the
+# test suite rewrites them, which repeatedly showed up as uncommitted changes
+# on field hosts.
+__pycache__/
+*.pyc
+*.pyo
