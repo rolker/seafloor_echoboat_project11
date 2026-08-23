@@ -12,6 +12,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <limits>
+
 #include "echo_helm/ellipsoidal_corrector.hpp"
 
 using echo_helm::EllipsoidalCorrector;
@@ -27,8 +30,10 @@ constexpr double kGpsEllipsoid = kGpsMsl + kReceiverUndulation;   // -26.4303
 constexpr double kRawFixAltitude = kGpsMsl + kMavrosUndulation;   // -25.8043
 constexpr double kCorrection = kGpsEllipsoid - kRawFixAltitude;   // -0.6260
 
-// Feed one coincident pair, as mavros delivers it: both messages built from the
-// same GPS_RAW_INT, stamped microseconds apart at publish time.
+// Feed one coincident pair, as mavros delivers it: both messages are built from
+// the same GPS_RAW_INT and stamped with the same synchronized_header, so in the
+// field the two stamps are identical. A small non-zero skew is used here so the
+// pairing logic is exercised rather than trivially satisfied.
 void feedPair(EllipsoidalCorrector & corrector, double t, double skew = 60e-6)
 {
   corrector.setRawFix(kRawFixAltitude, t);
@@ -185,4 +190,175 @@ TEST(EllipsoidalCorrector, ZeroCorrectionIsStillAValidCorrection)
   const auto corrected = corrector.correct(-26.8020, 100.0);
   ASSERT_TRUE(corrected.has_value());
   EXPECT_NEAR(*corrected, -26.8020, 1e-12);
+}
+
+// --- Validity gating -------------------------------------------------------
+//
+// The failure these guard against is the one that matters most: a structurally
+// valid message carrying a zero where a measurement should be, producing a
+// ~26 m "correction" that publishes as a good fix on the topic every sounding
+// depends on. mavros copies GPS_RAW_INT.alt_ellipsoid unconditionally, and that
+// field is a MAVLink-v2 extension, so a v1 link delivers exactly this.
+
+TEST(EllipsoidalCorrector, RejectsAbsentAltEllipsoidAsImplausible)
+{
+  // MAVLink v1: alt_ellipsoid absent, so mavros publishes 0 m. The caller's own
+  // sentinel check is the first line of defence; this asserts the second one --
+  // that even if a zero reaches the corrector it is refused, because
+  // 0 - (-25.8043) = +25.8043 m is not a geoid disagreement.
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  corrector.setRawFix(kRawFixAltitude, 100.0);
+  corrector.setGpsRaw(kGpsMsl, 0.0, 100.0);
+  EXPECT_FALSE(corrector.hasCorrection(100.0));
+  EXPECT_FALSE(corrector.correction().has_value());
+  EXPECT_FALSE(corrector.correct(-26.8020, 100.0).has_value());
+  EXPECT_EQ(corrector.lastReject(), EllipsoidalCorrector::Reject::Implausible);
+  EXPECT_EQ(corrector.rejectedPairCount(), 1u);
+}
+
+TEST(EllipsoidalCorrector, ImplausiblePairDoesNotDisturbAGoodCorrection)
+{
+  // A link that drops to v1 mid-run must not overwrite the correction already
+  // held; it must let it age out on its own.
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  feedPair(corrector, 100.0);
+  const double established = *corrector.correction();
+  corrector.setRawFix(kRawFixAltitude, 101.0);
+  corrector.setGpsRaw(kGpsMsl, 0.0, 101.0);
+  ASSERT_TRUE(corrector.correction().has_value());
+  EXPECT_NEAR(*corrector.correction(), established, 1e-12);
+  EXPECT_EQ(corrector.lastReject(), EllipsoidalCorrector::Reject::Implausible);
+  // ...and it still ages out rather than being held on the strength of the
+  // rejected sample's stamp.
+  EXPECT_FALSE(corrector.hasCorrection(131.0));
+}
+
+TEST(EllipsoidalCorrector, AcceptsACorrectionAtThePlausibilityBoundary)
+{
+  // The bound must not clip a legitimately larger geoid disagreement.
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  corrector.setRawFix(-25.0, 100.0);
+  corrector.setGpsRaw(kGpsMsl, -28.0, 100.0);
+  ASSERT_TRUE(corrector.hasCorrection(100.0));
+  EXPECT_NEAR(*corrector.correction(), -3.0, 1e-9);
+}
+
+TEST(EllipsoidalCorrector, RejectsSamplesFailingTheQualityGate)
+{
+  // Acquisition-time zeros: fix_type below 3D, or NavSatFix.status STATUS_NO_FIX.
+  // The caller passes quality_ok=false and no correction may be latched.
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  corrector.setRawFix(0.0, 100.0, /*quality_ok=*/false);
+  corrector.setGpsRaw(0.0, 0.0, 100.0, /*quality_ok=*/false);
+  EXPECT_FALSE(corrector.hasCorrection(100.0));
+  EXPECT_EQ(corrector.lastReject(), EllipsoidalCorrector::Reject::Incomplete);
+  EXPECT_EQ(corrector.rejectedPairCount(), 0u);
+}
+
+TEST(EllipsoidalCorrector, ARejectedSampleIsDiscardedNotHeld)
+{
+  // The dangerous shape: a bad raw/fix arrives, then a good gps1/raw with a
+  // coincident stamp. If the bad sample were merely ignored and left in place,
+  // the good one would pair with it and latch a correction from rubbish.
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  corrector.setRawFix(0.0, 100.0, /*quality_ok=*/false);
+  corrector.setGpsRaw(kGpsMsl, kGpsEllipsoid, 100.0, /*quality_ok=*/true);
+  EXPECT_FALSE(corrector.hasCorrection(100.0));
+  // A good raw/fix then completes a genuine pair.
+  corrector.setRawFix(kRawFixAltitude, 100.0, /*quality_ok=*/true);
+  ASSERT_TRUE(corrector.hasCorrection(100.0));
+  EXPECT_NEAR(*corrector.correction(), kCorrection, 1e-9);
+}
+
+TEST(EllipsoidalCorrector, QualityLossDoesNotDisturbAGoodCorrection)
+{
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  feedPair(corrector, 100.0);
+  const double established = *corrector.correction();
+  corrector.setGpsRaw(0.0, 0.0, 101.0, /*quality_ok=*/false);
+  ASSERT_TRUE(corrector.correction().has_value());
+  EXPECT_NEAR(*corrector.correction(), established, 1e-12);
+}
+
+TEST(EllipsoidalCorrector, RejectsNonFiniteAltitudes)
+{
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+
+  EllipsoidalCorrector a(0.05, 30.0, 3.0);
+  a.setRawFix(nan, 100.0);
+  a.setGpsRaw(kGpsMsl, kGpsEllipsoid, 100.0);
+  EXPECT_FALSE(a.hasCorrection(100.0));
+
+  EllipsoidalCorrector b(0.05, 30.0, 3.0);
+  b.setRawFix(kRawFixAltitude, 100.0);
+  b.setGpsRaw(kGpsMsl, inf, 100.0);
+  EXPECT_FALSE(b.hasCorrection(100.0));
+  EXPECT_FALSE(b.correction().has_value());
+}
+
+TEST(EllipsoidalCorrector, NonFiniteAltitudeNeverReachesTheOutput)
+{
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  feedPair(corrector, 100.0);
+  ASSERT_TRUE(corrector.hasCorrection(100.0));
+  EXPECT_FALSE(
+    corrector.correct(std::numeric_limits<double>::quiet_NaN(), 100.0).has_value());
+}
+
+// --- Undulation snapshots --------------------------------------------------
+
+TEST(EllipsoidalCorrector, UndulationsComeFromOnePairNotMixedSamples)
+{
+  // Once the topics decouple the reported undulations must keep describing the
+  // last good pair. Recomputing them live from the latest samples would mix an
+  // old gps1/raw with a new raw/fix and drift silently -- and these two values
+  // exist precisely to make such a drift visible.
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  feedPair(corrector, 100.0);
+  const double receiver = *corrector.receiverUndulation();
+  const double mavros = *corrector.mavrosUndulation();
+
+  // gps1/raw stops; raw/fix keeps arriving with a changing altitude.
+  corrector.setRawFix(kRawFixAltitude + 0.5, 105.0);
+  corrector.setRawFix(kRawFixAltitude + 1.5, 110.0);
+
+  EXPECT_NEAR(*corrector.receiverUndulation(), receiver, 1e-12);
+  EXPECT_NEAR(*corrector.mavrosUndulation(), mavros, 1e-12);
+  // The identity that defines the method still holds on the reported values.
+  EXPECT_NEAR(
+    *corrector.receiverUndulation() - *corrector.mavrosUndulation(),
+    *corrector.correction(), 1e-9);
+}
+
+TEST(EllipsoidalCorrector, NoUndulationsBeforeAPair)
+{
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  corrector.setRawFix(kRawFixAltitude, 100.0);
+  EXPECT_FALSE(corrector.receiverUndulation().has_value());
+  EXPECT_FALSE(corrector.mavrosUndulation().has_value());
+  EXPECT_FALSE(corrector.pairSkew().has_value());
+}
+
+// --- Diagnosability --------------------------------------------------------
+
+TEST(EllipsoidalCorrector, ReportsThePairSkew)
+{
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  feedPair(corrector, 100.0, 0.02);
+  ASSERT_TRUE(corrector.pairSkew().has_value());
+  EXPECT_NEAR(*corrector.pairSkew(), 0.02, 1e-9);
+}
+
+TEST(EllipsoidalCorrector, ReportsWhyPairingFailed)
+{
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  EXPECT_EQ(corrector.lastReject(), EllipsoidalCorrector::Reject::Incomplete);
+
+  corrector.setRawFix(kRawFixAltitude, 100.0);
+  corrector.setGpsRaw(kGpsMsl, kGpsEllipsoid, 100.2);
+  EXPECT_EQ(corrector.lastReject(), EllipsoidalCorrector::Reject::NotCoincident);
+
+  feedPair(corrector, 200.0);
+  EXPECT_EQ(corrector.lastReject(), EllipsoidalCorrector::Reject::None);
 }
