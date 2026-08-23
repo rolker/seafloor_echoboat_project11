@@ -25,17 +25,18 @@ ament_target_dependencies(${PROJECT_NAME}_node geometry_msgs mavros mavros_msgs 
 # Removes the geoid round trip from mavros's NavSatFix altitudes; see
 # include/echo_helm/ellipsoidal_corrector.hpp.
 add_executable(ellipsoidal_fix_node src/ellipsoidal_fix_node.cpp)
-target_include_directories(ellipsoidal_fix_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
+# PRIVATE, not PUBLIC: the header is an implementation detail of this package's
+# executables and its unit test. Nothing links against an executable target, so
+# an INSTALL_INTERFACE on one is inert, and the package exports no include
+# directories.
+target_include_directories(ellipsoidal_fix_node PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include)
 ament_target_dependencies(ellipsoidal_fix_node
   diagnostic_msgs mavros_msgs rclcpp sensor_msgs)
 
 install(TARGETS ${PROJECT_NAME}_node ellipsoidal_fix_node
   DESTINATION lib/${PROJECT_NAME}
 )
-
-install(DIRECTORY include/ DESTINATION include)
 
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
