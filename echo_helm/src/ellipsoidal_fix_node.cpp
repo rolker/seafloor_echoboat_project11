@@ -19,8 +19,18 @@
 // honours the contract (an SBG NavSatFix is already ellipsoidal). This node is
 // a stopgap in the right shape -- it should be deleted the day mavros prefers
 // GPS_RAW_INT.alt_ellipsoid upstream.
+//
+// Threading: everything below runs under the default single-threaded executor
+// (see main()). The three subscription callbacks and the diagnostic timer share
+// the corrector and the counters without a mutex, which is safe only because
+// that executor serialises them. Anything that moves this node into a
+// multi-threaded executor, or a component container with a parallel callback
+// group, must add the locking first.
 
+#include <cstdint>
+#include <cstdio>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
@@ -30,6 +40,7 @@
 #include "diagnostic_msgs/msg/key_value.hpp"
 #include "mavros_msgs/msg/gpsraw.hpp"
 #include "sensor_msgs/msg/nav_sat_fix.hpp"
+#include "sensor_msgs/msg/nav_sat_status.hpp"
 
 #include "echo_helm/ellipsoidal_corrector.hpp"
 
@@ -71,12 +82,28 @@ public:
       "output_topic", "mavros/global_position/global_ellipsoidal");
     const auto pair_tolerance = declare_parameter<double>("pair_tolerance", 0.05);
     const auto correction_timeout = declare_parameter<double>("correction_timeout", 30.0);
+    // A difference between two geoid models is sub-metre; 3 m leaves generous
+    // headroom for an unusual receiver table while still being two orders of
+    // magnitude below the ~26 m a missing MAVLink-v2 alt_ellipsoid produces.
+    const auto max_correction = declare_parameter<double>("max_correction", 3.0);
     diagnostic_name_ = declare_parameter<std::string>(
       "diagnostic_name", "GPS: ellipsoidal fix");
     hardware_id_ = declare_parameter<std::string>("hardware_id", "");
 
+    // A field param edit that points the output at one of the inputs would
+    // build a self-feeding loop, adding the correction again on every cycle and
+    // diverging 0.626 m per pass -- silently, because every message on it is a
+    // well-formed NavSatFix. Refuse to start instead.
+    for (const auto & input : {input_topic, raw_fix_topic}) {
+      if (output_topic == input) {
+        throw std::invalid_argument(
+                "output_topic \"" + output_topic + "\" is also an input topic; "
+                "this would feed the node its own output and diverge without bound");
+      }
+    }
+
     corrector_ = std::make_unique<echo_helm::EllipsoidalCorrector>(
-      pair_tolerance, correction_timeout);
+      pair_tolerance, correction_timeout, max_correction);
 
     // Best effort subscriptions are compatible with both best effort and
     // reliable publishers, so this attaches to mavros however it is configured.
@@ -109,13 +136,39 @@ private:
 
   void rawFixCallback(const sensor_msgs::msg::NavSatFix::SharedPtr msg)
   {
-    corrector_->setRawFix(msg->altitude, toSeconds(msg->header.stamp));
+    // STATUS_NO_FIX (-1) means the receiver is still acquiring and the altitude
+    // field is whatever the driver last had -- frequently zero. Pairing that
+    // with a good gps1/raw would latch a correction from acquisition-time
+    // rubbish and hold it for the full correction_timeout.
+    const bool quality_ok = msg->status.status >= sensor_msgs::msg::NavSatStatus::STATUS_FIX;
+    corrector_->setRawFix(msg->altitude, toSeconds(msg->header.stamp), quality_ok);
   }
 
   void gpsRawCallback(const mavros_msgs::msg::GPSRAW::SharedPtr msg)
   {
+    // Two independent gates, because they fail independently:
+    //
+    // fix_type below 3D means there is no vertical solution yet, so alt and
+    // alt_ellipsoid are both meaningless (and typically zero) during
+    // acquisition.
+    //
+    // alt_ellipsoid is a MAVLink-v2 extension. mavros copies it
+    // unconditionally, so over a v1 link -- or from a receiver that does not
+    // populate it -- the field arrives as exactly 0 mm in an otherwise valid
+    // message. A genuine reading of exactly 0 mm above the ellipsoid does not
+    // occur in practice, so the sentinel is safe to reject, and the corrector's
+    // max_correction bound catches anything this misses.
+    const bool has_3d_fix = msg->fix_type >= mavros_msgs::msg::GPSRAW::GPS_FIX_TYPE_3D_FIX;
+    const bool has_ellipsoid = msg->alt_ellipsoid != 0;
+    if (!has_ellipsoid) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 30000,
+        "GPS_RAW_INT.alt_ellipsoid is absent (0); this link is probably MAVLink v1. "
+        "No ellipsoidal correction is possible and no corrected fix will be published.");
+    }
     corrector_->setGpsRaw(
-      msg->alt / 1000.0, msg->alt_ellipsoid / 1000.0, toSeconds(msg->header.stamp));
+      msg->alt / 1000.0, msg->alt_ellipsoid / 1000.0, toSeconds(msg->header.stamp),
+      has_3d_fix && has_ellipsoid);
   }
 
   void inputCallback(const sensor_msgs::msg::NavSatFix::SharedPtr msg)
@@ -123,9 +176,16 @@ private:
     const auto corrected = corrector_->correct(msg->altitude, now().seconds());
     if (!corrected) {
       // Publishing the uncorrected altitude would be wrong by more than half a
-      // metre and indistinguishable downstream from a good fix. Withholding it
-      // lets mru_transform's sensor_timeout fail over to another source, and
-      // the diagnostic says why.
+      // metre and indistinguishable downstream from a good fix, so it is
+      // withheld and the diagnostic says why.
+      //
+      // On BizzyBoat as configured today, withholding also lets mru_transform's
+      // sensor_timeout fail over to the SBG. That failover is a property of the
+      // boat's config, not of this node: it holds only while a second nav
+      // source is fitted and listed in `sensor_names` (the SBG is a loaner),
+      // and the generic `echo.yaml` configures a single sensor. Where there is
+      // no second source, withholding is a deliberate outage in preference to a
+      // silent half-metre error -- the diagnostic is what makes it visible.
       ++skipped_count_;
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 10000,
@@ -197,7 +257,16 @@ private:
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<EllipsoidalFix>());
+  try {
+    // Single-threaded by design -- see the threading note at the top of the file.
+    rclcpp::spin(std::make_shared<EllipsoidalFix>());
+  } catch (const std::exception & e) {
+    // A misconfiguration must fail loudly and stay down rather than respawn
+    // into the same bad state; the message is the only thing the operator gets.
+    RCLCPP_FATAL(rclcpp::get_logger("ellipsoidal_fix"), "%s", e.what());
+    rclcpp::shutdown();
+    return 1;
+  }
   rclcpp::shutdown();
   return 0;
 }
