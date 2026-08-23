@@ -57,7 +57,10 @@ diagnostic_msgs::msg::KeyValue keyValue(const std::string & key, const std::stri
   return kv;
 }
 
-std::string metres(double value)
+/// Four decimal places: sub-millimetre on a metres value, sub-millisecond on a
+/// seconds value. Deliberately unit-agnostic -- the diagnostic keys carry the
+/// unit (`correction_m`, `correction_age_s`), the formatter does not.
+std::string fixed4(double value)
 {
   char buffer[32];
   std::snprintf(buffer, sizeof(buffer), "%.4f", value);
@@ -86,6 +89,10 @@ public:
     // headroom for an unusual receiver table while still being two orders of
     // magnitude below the ~26 m a missing MAVLink-v2 alt_ellipsoid produces.
     const auto max_correction = declare_parameter<double>("max_correction", 3.0);
+    // How long the input may be silent before the node reports a fault. The
+    // fused global position runs at several Hz, so a couple of seconds is many
+    // missed messages, not jitter.
+    input_timeout_ = declare_parameter<double>("input_timeout", 3.0);
     diagnostic_name_ = declare_parameter<std::string>(
       "diagnostic_name", "GPS: ellipsoidal fix");
     hardware_id_ = declare_parameter<std::string>("hardware_id", "");
@@ -120,6 +127,7 @@ public:
     gps_raw_subscription_ = create_subscription<mavros_msgs::msg::GPSRAW>(
       gps_raw_topic, qos, std::bind(&EllipsoidalFix::gpsRawCallback, this, std::placeholders::_1));
 
+    input_topic_ = input_topic;
     diagnostic_timer_ = create_wall_timer(1s, std::bind(&EllipsoidalFix::publishDiagnostic, this));
 
     RCLCPP_INFO_STREAM(
@@ -173,7 +181,11 @@ private:
 
   void inputCallback(const sensor_msgs::msg::NavSatFix::SharedPtr msg)
   {
-    const auto corrected = corrector_->correct(msg->altitude, now().seconds());
+    const double t = now().seconds();
+    last_input_time_ = t;
+    ++input_count_;
+
+    const auto corrected = corrector_->correct(msg->altitude, t);
     if (!corrected) {
       // Publishing the uncorrected altitude would be wrong by more than half a
       // metre and indistinguishable downstream from a good fix, so it is
@@ -195,6 +207,7 @@ private:
     auto out = *msg;
     out.altitude = *corrected;
     publisher_->publish(out);
+    last_publish_time_ = t;
     ++published_count_;
   }
 
@@ -206,32 +219,82 @@ private:
     status.hardware_id = hardware_id_;
 
     const auto correction = corrector_->correction();
+    const bool have_fresh_correction = corrector_->hasCorrection(t);
+
+    // Two independent things can be wrong, and the old version only looked at
+    // one of them. A correction can be perfectly fresh while nothing at all is
+    // coming out, because the input topic died or mavros respawned under us --
+    // and a node that reports OK while publishing nothing is worse than one
+    // that publishes nothing loudly.
+    const bool input_flowing = input_count_ > 0 &&
+      (t - last_input_time_) <= input_timeout_ &&
+      (t - last_input_time_) >= -input_timeout_;
+
+    auto level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+    std::string message;
+
     if (!correction) {
-      status.level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
-      status.message = "no correction established";
-    } else if (!corrector_->hasCorrection(t)) {
-      status.level = diagnostic_msgs::msg::DiagnosticStatus::STALE;
-      status.message = "correction stale; not publishing";
+      level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
+      message = std::string("no correction established: ") +
+        echo_helm::EllipsoidalCorrector::rejectDescription(corrector_->lastReject());
+    } else if (!have_fresh_correction) {
+      level = diagnostic_msgs::msg::DiagnosticStatus::STALE;
+      message = "correction stale; not publishing";
     } else {
-      status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
-      status.message = "correcting " + metres(*correction) + " m";
+      message = "correcting " + fixed4(*correction) + " m";
     }
 
+    if (!input_flowing) {
+      // Silent input outranks a healthy correction: nothing is reaching the
+      // output either way.
+      level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
+      const std::string why = input_count_ == 0 ?
+        "no message ever received on \"" + input_topic_ + "\"" :
+        "no message on \"" + input_topic_ + "\" for " +
+        fixed4(t - last_input_time_) + " s";
+      message = message.empty() ? why : why + "; " + message;
+    }
+
+    status.level = level;
+    status.message = message;
+
     if (correction) {
-      status.values.push_back(keyValue("correction_m", metres(*correction)));
+      status.values.push_back(keyValue("correction_m", fixed4(*correction)));
       status.values.push_back(
-        keyValue("correction_age_s", metres(corrector_->correctionAge(t))));
+        keyValue("correction_age_s", fixed4(corrector_->correctionAge(t))));
     }
     // These two are the terms whose disagreement *is* the defect. Publishing
     // them means a change of receiver, geoid dataset or mavros version shows up
     // here instead of being inferred from a tide error days later.
     if (const auto undulation = corrector_->receiverUndulation()) {
-      status.values.push_back(keyValue("receiver_undulation_m", metres(*undulation)));
+      status.values.push_back(keyValue("receiver_undulation_m", fixed4(*undulation)));
     }
     if (const auto undulation = corrector_->mavrosUndulation()) {
-      status.values.push_back(keyValue("mavros_undulation_m", metres(*undulation)));
+      status.values.push_back(keyValue("mavros_undulation_m", fixed4(*undulation)));
     }
+    // A pairing that is drifting towards the tolerance presents, once it
+    // crosses, as a total outage with no explanation. Publish the skew so the
+    // drift is visible first.
+    if (const auto skew = corrector_->pairSkew()) {
+      status.values.push_back(keyValue("pair_skew_s", fixed4(*skew)));
+    }
+    status.values.push_back(
+      keyValue("rejected_pairs", std::to_string(corrector_->rejectedPairCount())));
+    status.values.push_back(
+      keyValue(
+        "last_reject",
+        echo_helm::EllipsoidalCorrector::rejectDescription(corrector_->lastReject())));
+    status.values.push_back(keyValue("input_topic", input_topic_));
+    status.values.push_back(keyValue("received", std::to_string(input_count_)));
+    status.values.push_back(
+      keyValue(
+        "since_last_input_s",
+        input_count_ == 0 ? "never" : fixed4(t - last_input_time_)));
     status.values.push_back(keyValue("published", std::to_string(published_count_)));
+    status.values.push_back(
+      keyValue(
+        "since_last_publish_s",
+        published_count_ == 0 ? "never" : fixed4(t - last_publish_time_)));
     status.values.push_back(keyValue("withheld", std::to_string(skipped_count_)));
 
     diagnostic_msgs::msg::DiagnosticArray array;
@@ -243,6 +306,11 @@ private:
   std::unique_ptr<echo_helm::EllipsoidalCorrector> corrector_;
   std::string diagnostic_name_;
   std::string hardware_id_;
+  std::string input_topic_;
+  double input_timeout_ = 3.0;
+  double last_input_time_ = 0.0;
+  double last_publish_time_ = 0.0;
+  uint64_t input_count_ = 0;
   uint64_t published_count_ = 0;
   uint64_t skipped_count_ = 0;
 
