@@ -141,13 +141,33 @@ public:
     return correction_.has_value() && correctionAge(now) <= correction_timeout_;
   }
 
-  /// Seconds since the correction was last established; infinite if never.
+  /// Seconds since the correction was last established; infinite if never, and
+  /// infinite if \p now precedes the correction's stamp by more than the pair
+  /// tolerance.
+  ///
+  /// That second case is a clock step, not an age. Message stamps come from the
+  /// FCU-synchronized clock while \p now comes from the node clock, so one
+  /// boot-time system-clock sync (or a sim-time reset) can put `now` behind a
+  /// correction established moments earlier. Reported as a negative -- or
+  /// clamped to zero -- it would read as *permanently fresh* and pin a stale
+  /// correction in place for as long as the node ran. Reported as infinite it
+  /// reads as stale, output is withheld, and the very next coincident pair
+  /// re-establishes the correction against the new clock. Small negative skews
+  /// within the pair tolerance are ordinary stamp-vs-clock jitter and clamp to
+  /// zero.
   double correctionAge(double now) const
   {
     if (!correction_.has_value()) {
       return std::numeric_limits<double>::infinity();
     }
-    return now - correction_stamp_;
+    if (!std::isfinite(now)) {
+      return std::numeric_limits<double>::infinity();
+    }
+    const double age = now - correction_stamp_;
+    if (age < -pair_tolerance_) {
+      return std::numeric_limits<double>::infinity();
+    }
+    return std::max(0.0, age);
   }
 
   /// Metres to add to a mavros altitude. Only meaningful once established.

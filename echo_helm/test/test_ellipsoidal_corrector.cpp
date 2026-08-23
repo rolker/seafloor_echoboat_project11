@@ -306,6 +306,44 @@ TEST(EllipsoidalCorrector, NonFiniteAltitudeNeverReachesTheOutput)
     corrector.correct(std::numeric_limits<double>::quiet_NaN(), 100.0).has_value());
 }
 
+// --- Clock steps -----------------------------------------------------------
+
+TEST(EllipsoidalCorrector, BackwardClockStepMakesTheCorrectionStale)
+{
+  // Message stamps come from the FCU-synchronized clock, `now` from the node
+  // clock. One boot-time sync can put `now` behind a correction established
+  // moments earlier. A raw subtraction gives a negative age, which compares
+  // <= timeout for ever: the correction would be pinned as permanently fresh
+  // and the boat would run the rest of the session on a stale value.
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  feedPair(corrector, 1000.0);
+  ASSERT_TRUE(corrector.hasCorrection(1000.0));
+
+  EXPECT_TRUE(std::isinf(corrector.correctionAge(900.0)));
+  EXPECT_FALSE(corrector.hasCorrection(900.0));
+  EXPECT_FALSE(corrector.correct(-26.8020, 900.0).has_value());
+}
+
+TEST(EllipsoidalCorrector, AgeIsNeverNegative)
+{
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  feedPair(corrector, 100.0);
+  // Within the pair tolerance a slightly-behind clock is ordinary jitter.
+  EXPECT_GE(corrector.correctionAge(100.0 - 0.01), 0.0);
+  EXPECT_NEAR(corrector.correctionAge(100.0 - 0.01), 0.0, 1e-12);
+  EXPECT_TRUE(corrector.hasCorrection(100.0 - 0.01));
+}
+
+TEST(EllipsoidalCorrector, RecoversAfterABackwardClockStep)
+{
+  EllipsoidalCorrector corrector(0.05, 30.0, 3.0);
+  feedPair(corrector, 1000.0);
+  ASSERT_FALSE(corrector.hasCorrection(900.0));
+  // The next coincident pair re-establishes against the new clock.
+  feedPair(corrector, 900.0);
+  EXPECT_TRUE(corrector.hasCorrection(900.0));
+}
+
 // --- Undulation snapshots --------------------------------------------------
 
 TEST(EllipsoidalCorrector, UndulationsComeFromOnePairNotMixedSamples)
