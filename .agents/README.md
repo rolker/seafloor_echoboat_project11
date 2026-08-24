@@ -24,7 +24,7 @@ this repo's own conventions apply.
 | Package | Language | Description |
 |---------|----------|-------------|
 | `echoboat_project11` | launch/config (ament_cmake, no compiled code) | Launch files and nav2/mavros/platform configuration for EchoBoat ASVs; pytest suite for the param-compose mechanism and launch wiring |
-| `echo_helm` | C++ | `echo_helm` lifecycle node: bridges `marine/control/cmd_vel` to the ArduPilot FCU via mavros, manages arming/mode on standby transitions |
+| `echo_helm` | C++ | Two executables. `echo_helm_node` (lifecycle): bridges `marine/control/cmd_vel` to the ArduPilot FCU via mavros, manages arming/mode on standby transitions. `ellipsoidal_fix_node`: republishes mavros's fused global position with a true WGS-84 ellipsoidal altitude |
 
 ## Repository Layout
 
@@ -37,6 +37,9 @@ seafloor_echoboat_project11/
 │   └── test/              # test_param_compose.py, test_launch_wiring.py
 └── echo_helm/
     ├── src/echo_helm_node.cpp
+    ├── src/ellipsoidal_fix_node.cpp
+    ├── include/echo_helm/ellipsoidal_corrector.hpp   # ROS-free, unit-tested
+    ├── test/test_ellipsoidal_corrector.cpp
     ├── launch/echo_helm_launch.py
     └── scripts/           # ArduPilot docker sim helper
 ```
@@ -87,6 +90,53 @@ per-instance layer.
   (`marine_autonomy_standby`, `connected`, `armed`, `guided`, `mode`) at the
   `mavros/state` rate; on activate the node requests a 10 Hz stream rate.
 
+**`ellipsoidal_fix` node** (repo issue #55; plain node, not lifecycle):
+
+`sensor_msgs/NavSatFix` says altitude is above the WGS-84 ellipsoid, but mavros
+publishes `GLOBAL_POSITION_INT`'s AMSL altitude converted back to ellipsoidal
+with GeographicLib EGM96-5, while the receiver derived that AMSL value from its
+own internal geoid table. Two different geoid models, so the difference is left
+behind: **0.626 m** measured at the UNH pier on 2026-08-21 (receiver undulation
+-27.7150 m, EGM96-5 -27.0890 m). It flowed into odom, the sea-surface estimate,
+the tide and every sounding.
+
+The node measures the correction rather than tabulating it. mavros builds
+`global_position/raw/fix` and `gpsstatus/gps1/raw` from the *same* `GPS_RAW_INT`
+and stamps both with `synchronized_header(..., time_usec)`, so the EGM96 term
+cancels in `correction = alt_ellipsoid - raw_fix_altitude`. No geoid model, no
+constant to remember to update across a site move or a firmware change.
+
+| Interface | Name | Type |
+|---|---|---|
+| sub | `mavros/global_position/global` (`input_topic`) | `sensor_msgs/NavSatFix` |
+| sub | `mavros/global_position/raw/fix` (`raw_fix_topic`) | `sensor_msgs/NavSatFix` |
+| sub | `mavros/gpsstatus/gps1/raw` (`gps_raw_topic`) | `mavros_msgs/GPSRAW` |
+| pub | `mavros/global_position/global_ellipsoidal` (`output_topic`) | `sensor_msgs/NavSatFix` |
+| pub | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` |
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `input_topic` | `mavros/global_position/global` | Fused position to correct |
+| `raw_fix_topic` | `mavros/global_position/raw/fix` | mavros's EGM96-converted raw fix |
+| `gps_raw_topic` | `mavros/gpsstatus/gps1/raw` | `GPS_RAW_INT` with `alt_ellipsoid` |
+| `output_topic` | `mavros/global_position/global_ellipsoidal` | Corrected output; must differ from the inputs or the node refuses to start |
+| `pair_tolerance` | `0.05` s | Max stamp separation for two samples to count as one `GPS_RAW_INT` |
+| `correction_timeout` | `30.0` s | How long a correction may be reused after the last good pair |
+| `max_correction` | `3.0` m | Plausibility bound on \|correction\| |
+| `input_timeout` | `3.0` s | Input silence before the diagnostic faults |
+| `diagnostic_name` | `GPS: ellipsoidal fix` | Diagnostic status name |
+| `hardware_id` | `""` | Diagnostic hardware id |
+
+**It withholds rather than degrades.** With no usable correction it publishes
+nothing, because an uncorrected altitude is wrong by more than half a metre and
+indistinguishable downstream from a good one. On a boat with a second nav source
+in `mru_transform`'s `sensor_names` that lets `sensor_timeout` fail over;
+where there is only one source it is a deliberate, diagnosed outage.
+
+**Launched from** `echo_helm_launch.py` under the `enable_ellipsoidal_fix` arg
+(default true), with `respawn` — it owns the FCU nav position that reaches
+`mru_transform`.
+
 **Deployed consumer**: `unh_echoboats_project11` (BizzyBoat/IzzyBoat instance
 repo) includes `echo_launch.py` from its platform launches and supplies the
 namespace (`bizzy`), frame prefix, FCU URL, and instance overlays.
@@ -99,6 +149,8 @@ namespace (`bizzy`), frame prefix, FCU URL, and instance overlays.
 3. `echoboat_project11/config/nav2_params.240.yaml` — deployed-boat overlay,
    heavily annotated with tuning provenance
 4. `echo_helm/src/echo_helm_node.cpp` — the FCU bridge (298 lines)
+4b. `echo_helm/include/echo_helm/ellipsoidal_corrector.hpp` — the geoid-round-trip
+   correction, its validity gates and its derivation, all in the header comments
 5. `echoboat_project11/config/echo.yaml` — platform_sender/mru_transform/helm_manager params
 
 ## Build & Test
@@ -149,6 +201,19 @@ source ../../../.agent/scripts/setup.bash && colcon test --packages-select echob
   (launch-time include). A gratuitous `find_package(marine_autonomy
   REQUIRED)` was removed from its CMakeLists during onboarding — don't
   reintroduce build-time deps into this config-only package.
+- **`alt_ellipsoid` is a MAVLink-v2 extension field, and mavros copies it
+  unconditionally** — over a v1 link (or from a receiver that doesn't populate
+  it) it arrives as exactly 0 in a structurally valid `GPSRAW`, which would make
+  `ellipsoidal_fix` compute a ~26 m "correction" and publish it as a good fix.
+  Three guards stop that: the absent-field sentinel check, the `fix_type` /
+  `NavSatFix.status` quality gate, and the `max_correction` plausibility bound.
+  Don't loosen any of them without reading
+  `include/echo_helm/ellipsoidal_corrector.hpp` — this node is on the vertical
+  path every sounding depends on.
+- **`ellipsoidal_fix` is single-threaded by design** — its three callbacks and
+  the diagnostic timer share state without a mutex, safe only under the default
+  single-threaded executor. Moving it to a multi-threaded executor or a
+  component container needs locking first.
 - The Nav2/behavior rates here are marine-vessel rates (~10 Hz class), not
   Nav2's small-indoor-robot defaults — don't bump them to match upstream
   examples (workspace knowledge: `ros2_development_patterns.md`).
