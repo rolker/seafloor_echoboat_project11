@@ -341,13 +341,26 @@ def generate_launch_description():
             # Two mutually-exclusive managers: the node list must match what is
             # actually launched. With ca_safety active, the Collision Monitor is
             # absent, so it is dropped from the managed list.
+            # bond_timeout is raised from nav2's 4.0 s default because the
+            # planner can legitimately exceed it: planner_server sets
+            # max_planning_time: 5.0, and createPlan runs in the action
+            # callback on the same executor that services the node's own bond
+            # heartbeat. A plan longer than the bond timeout therefore starves
+            # the heartbeat, the manager concludes planner_server has died, and
+            # because it is a managed node EVERY managed node is deactivated --
+            # the mission stops with no operator action and the boat drifts.
+            # 8.0 comfortably clears max_planning_time. This changes only how
+            # long the manager waits before declaring a node dead; it does not
+            # change what the planner does.
             Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
                 name='lifecycle_manager_navigation',
                 output='screen',
                 arguments=['--ros-args', '--log-level', log_level],
-                parameters=[{'autostart': autostart}, {'node_names': lifecycle_nodes}],
+                parameters=[{'autostart': autostart},
+                            {'node_names': lifecycle_nodes},
+                            {'bond_timeout': 8.0}],
                 emulate_tty=True,
                 condition=UnlessCondition(use_ca_safety),
             ),
@@ -357,7 +370,9 @@ def generate_launch_description():
                 name='lifecycle_manager_navigation',
                 output='screen',
                 arguments=['--ros-args', '--log-level', log_level],
-                parameters=[{'autostart': autostart}, {'node_names': lifecycle_nodes_no_monitor}],
+                parameters=[{'autostart': autostart},
+                            {'node_names': lifecycle_nodes_no_monitor},
+                            {'bond_timeout': 8.0}],
                 emulate_tty=True,
                 condition=IfCondition(use_ca_safety),
             ),
@@ -460,7 +475,8 @@ def generate_launch_description():
                         plugin='nav2_lifecycle_manager::LifecycleManager',
                         name='lifecycle_manager_navigation',
                         parameters=[
-                            {'autostart': autostart, 'node_names': lifecycle_nodes}
+                            {'autostart': autostart, 'node_names': lifecycle_nodes,
+                             'bond_timeout': 8.0}
                         ],
                     ),
                 ],

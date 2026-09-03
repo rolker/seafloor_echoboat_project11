@@ -215,3 +215,99 @@ def test_remappings_var_does_not_target_helm_topic():
     literals inside the call). A helm-topic remap added to this shared var would
     slip past the per-node #27 guard, so assert the variable itself is clean."""
     assert _HELM_TOPIC not in _remappings_var_targets(_launch_tree())
+
+
+# --- lifecycle manager bond timeout clears the planner's max_planning_time ---
+
+
+def _manager_bond_timeouts(tree):
+    """`bond_timeout` per `lifecycle_manager_navigation` construction.
+
+    Returns one entry per construction in launch order — `None` where the
+    parameter is absent, so a manager that never sets it is visible rather
+    than merely missing from the list.
+    """
+    out = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _NODE_CALLS
+        ):
+            continue
+        if not any(
+            kw.arg == "name" and _str(kw.value) == "lifecycle_manager_navigation"
+            for kw in node.keywords
+        ):
+            continue
+        found = None
+        for kw in node.keywords:
+            if kw.arg != "parameters":
+                continue
+            # `parameters` is a list of dict literals; scan every key of every
+            # dict rather than assuming which dict carries the timeout.
+            for dict_node in ast.walk(kw.value):
+                if not isinstance(dict_node, ast.Dict):
+                    continue
+                for key, value in zip(dict_node.keys, dict_node.values):
+                    if _str(key) == "bond_timeout" and isinstance(value, ast.Constant):
+                        found = value.value
+        out.append(found)
+    return out
+
+
+def test_every_lifecycle_manager_sets_bond_timeout():
+    """A manager without a raised bond_timeout stops the mission silently.
+
+    `planner_server` sets `max_planning_time: 5.0`, and `createPlan` runs in
+    the action callback on the same executor that services the node's own bond
+    heartbeat. A plan longer than nav2's 4.0 s default `bond_timeout` starves
+    the heartbeat, the manager concludes `planner_server` has died, and because
+    it is a managed node EVERY managed node is deactivated -- the mission stops
+    with no operator action and the boat drifts.
+
+    There are three constructions of this manager (the two mutually-exclusive
+    `Node` forms for use_ca_safety, and the composition `ComposableNode`), and
+    only whichever one is launched that day matters. So this asserts all of
+    them rather than the one that happened to be exercised.
+    """
+    timeouts = _manager_bond_timeouts(_launch_tree())
+    assert len(timeouts) == 3, (
+        "expected three lifecycle_manager_navigation constructions, found "
+        f"{len(timeouts)} -- if one was added or removed, update this rather "
+        "than loosening it"
+    )
+    missing = [i for i, t in enumerate(timeouts) if t is None]
+    assert not missing, (
+        f"lifecycle_manager_navigation construction(s) {missing} set no "
+        "bond_timeout, so they keep nav2's 4.0 s default and a long plan will "
+        "deactivate the whole managed set"
+    )
+
+
+def test_bond_timeout_clears_max_planning_time():
+    """The value must actually exceed what the planner is allowed to take."""
+    with open(os.path.join(_CONFIG, "nav2_params.base.yaml")) as f:
+        params = yaml.safe_load(f)
+    # Nested under the planner plugin's own key (`GridBased` today), so search
+    # rather than hardcode a path that a plugin swap would silently break. Take
+    # the largest if several planners are configured -- the bond must clear the
+    # slowest one.
+    times = []
+
+    def _collect(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "max_planning_time":
+                    times.append(value)
+                _collect(value)
+
+    _collect(params.get("planner_server", {}))
+    assert times, "no max_planning_time under planner_server -- has the config moved?"
+    max_planning_time = max(times)
+    for i, timeout in enumerate(_manager_bond_timeouts(_launch_tree())):
+        assert timeout is not None and timeout > max_planning_time, (
+            f"construction {i} has bond_timeout={timeout}, which does not clear "
+            f"planner_server max_planning_time={max_planning_time} -- a plan at "
+            "the planner's own limit would be read as a dead node"
+        )
